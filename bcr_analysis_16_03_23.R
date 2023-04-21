@@ -2,14 +2,8 @@
 # Load packages
 #######################################
 
-library(dplyr)
-library(readr)
-library(stringr)
-library(ggplot2)
+library(tidyverse)
 library(Seurat)
-library(harmony)
-library(celldex)
-library(SingleR)
 library(ggrepel)
 library(gridExtra)
 library(edgeR)
@@ -28,6 +22,20 @@ setwd("/rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/BCR")
 b_cells = readRDS("b_cells_post_processing.rds")
 rownames(b_cells@meta.data) = colnames(b_cells)
 
+# define plot theme
+theme_umap = function(){
+    theme_minimal() %+replace%
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks = element_blank(),
+      plot.title=element_blank(),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text.x = element_blank(),
+      axis.text.y = element_blank()
+    )
+}
 #######################################
 # Big picture descriptive stats
 #######################################
@@ -48,33 +56,8 @@ b_cells = FindNeighbors(b_cells)
 b_cells = FindClusters(b_cells,resolution=0.2)
 
 # filter to just celltypist B cell annotations
-b_cells = subset(b_cells,subset = ann_celltypist_highres %in% 
-                   c("B cells",
-                     "Cycling B cells",
-                     "Germinal center B cells",
-                     "Follicular B cells",
-                     "Large pre-B cells","Memory B cells","Naive B cells",
-                     "Pre-pro-B cells",
-                     "Small pre-B cells","Plasma cells","Transitional B cells"))
+b_cells = subset(b_cells,subset = ann_celltypist_highres %in% c("B cells","Cycling B cells","Germinal center B cells","Large pre-B cells","Memory B cells","Naive B cells","Small pre-B cells","Plasma cells","Transitional B cells","Follicular B cells","Pre-pro-B cells"))
 b_cells = SetIdent(b_cells,value="ann_celltypist_highres")
-table(b_cells@meta.data$ann_celltypist_highres)
-
-# plots to check annotations
-p1=DimPlot(b_cells)
-p2=FeaturePlot(b_cells,features=b_cell_markers)
-p3=DotPlot(b_cells,features=b_cell_markers)
-
-png("dimplot.png",res=300,units="in",width=6,height=6)
-p1
-dev.off()
-
-png("featureplot.png",res=300,units="in",width=12,height=12)
-p2
-dev.off()
-
-png("dotplot.png",res=300,units="in",width=10,height=12)
-p3
-dev.off()
 
 ##############################
 # cluster biomarkers
@@ -96,52 +79,82 @@ colour_pal <- RColorBrewer::brewer.pal(n_col, "Paired")
 colour_pal <- grDevices::colorRampPalette(colour_pal)(n_col)
 
 b_cells@meta.data$cell_type = factor(
-b_cells@meta.data$cell_type,
-ordered=TRUE,
-levels = c("Naive B cells","Memory B cells","Plasma cells",
-"Transitional B cells","B cells","Germinal center B cells",
-"Large pre-B cells","Cycling B cells","Small pre-B cells","Follicular B cells","Pre-pro-B cells"))
+  b_cells@meta.data$cell_type,
+  ordered=TRUE,
+  levels = c("Naive B cells","Memory B cells","Plasma cells",
+             "Transitional B cells","B cells","Germinal center B cells",
+             "Large pre-B cells","Cycling B cells","Small pre-B cells","Pre-pro-B cells","Follicular B cells"))
+
+
+
+# plots to check annotations
+p1=DimPlot(b_cells)
+p2=FeaturePlot(b_cells,features=b_cell_markers)
+p3=DotPlot(b_cells,features=b_cell_markers)
+
+png("dimplot.png",res=600,units="in",width=6,height=6)
+p1 + theme_umap() +  scale_color_manual(values = colour_pal)
+dev.off()
+
+png("featureplot.png",res=600,units="in",width=6,height=6)
+p2
+dev.off()
+
+png("dotplot.png",res=300,units="in",width=10,height=12)
+p3
+dev.off()
 
 p=DimPlot(b_cells,label=F,raster=F,group.by="cell_type")+
-scale_color_manual(values = colour_pal)+
-ggtitle("")+
-theme_minimal()+
-theme(axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  scale_color_manual(values = colour_pal)+
+  ggtitle("")+
+  theme_minimal()+
+  theme(axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
   labs(x="",y="")
 
-png("dim_plot_simple_labels.png",res=300,units="in",width=5,height=4)
+png("dim_plot_simple_labels.png",res=600,units="in",width=5,height=4)
+p
+dev.off()
+
+p=DimPlot(b_cells,split.by="source",label=F,raster=F,group.by="cell_type")+
+  scale_color_manual(values = colour_pal)+
+  ggtitle("")+
+  theme_minimal()+
+  theme(axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  labs(x="",y="")
+
+png("dim_plot_simple_labels_source.png",res=600,units="in",width=5,height=3)
 p
 dev.off()
 
 # stash sample info
 sample_info = b_cells@meta.data %>%
-dplyr::select(iid,source,phenotype,donor_source) %>%
-distinct(donor_source,.keep_all=TRUE)
+  dplyr::select(iid,source,phenotype,donor_source) %>%
+  distinct(donor_source,.keep_all=TRUE)
 
 abundances = table(b_cells@meta.data$cell_type,b_cells@meta.data$donor_source)
 
-# filter out clusters with 0 counts
-abundances = abundances[rowSums(abundances)>10,]
+# filter out clusters with 5 counts
+abundances = abundances[rowSums(abundances)>5,]
 
 sample_info = sample_info %>% filter(donor_source %in% colnames(abundances))
 sample_info = sample_info[match(colnames(abundances),sample_info$donor_source),]
 sample_info$grouping = paste0(sample_info$phenotype,"_",sample_info$source)
 sample_info$grouping = sapply(sample_info$grouping, function(x){
-    if(x == "NIND_CSF"){
-      return("Control_CSF")
-    } else if(x == "NIND_PBMC"){
-      return("Control_PBMC")
-    } else {
-      return(x)
-    }
-    })
+  if(x == "NIND_CSF"){
+    return("Control_CSF")
+  } else if(x == "NIND_PBMC"){
+    return("Control_PBMC")
+  } else {
+    return(x)
+  }
+})
 
 y.ab = DGEList(abundances, samples=sample_info)
 
 # update sample info
 y.ab$samples =  y.ab$samples %>% left_join(b_cells@meta.data %>%
-  distinct(donor_source,.keep_all=TRUE) %>%
-  dplyr::select(Age,Sex,donor_source),by="donor_source")
+                                             distinct(donor_source,.keep_all=TRUE) %>%
+                                             dplyr::select(Age,Sex,donor_source),by="donor_source")
 
 # now loop
 da_overall_list = list()
@@ -184,23 +197,23 @@ for(i in 1:length(colnames(contrast))){
 
   # refactor cell types (for plotting)
   res$cell = factor(res$cell,ordered=TRUE,
-  levels = c("Naive B cells","Memory B cells","Plasma cells",
-  "Transitional B cells","B cells","Germinal center B cells",
-  "Large pre-B cells","Cycling B cells","Small pre-B cells"))
+                    levels = c("Naive B cells","Memory B cells","Plasma cells",
+                               "Transitional B cells","B cells","Germinal center B cells",
+                               "Large pre-B cells","Cycling B cells","Small pre-B cells"))
 
   # da plot
 
   plot = ggplot(res,aes(logFC,-log10(PValue),color=cell,label=cell))+
-  theme_classic()+
-  scale_color_manual(values = colour_pal)+
-  geom_text_repel(size=3,max.overlaps=100)+
-  geom_hline(yintercept= -log10(0.05/length(res$logFC)),alpha=0.2)+
-  geom_vline(xintercept = 0,alpha=0.2)+
-  NoLegend()+
-  ggtitle(comparison_label)+
-  scale_y_continuous(limits=c(0,50))+
-  scale_x_continuous(limits=c(-9,9))+
-  geom_point(shape=16,size=3)
+    theme_classic()+
+    scale_color_manual(values = colour_pal)+
+    geom_text_repel(size=3,max.overlaps=100)+
+    geom_hline(yintercept= -log10(0.05/length(res$logFC)),alpha=0.2)+
+    geom_vline(xintercept = 0,alpha=0.2)+
+    NoLegend()+
+    ggtitle(comparison_label)+
+    scale_y_continuous(limits=c(0,50))+
+    scale_x_continuous(limits=c(-9,9))+
+    geom_point(shape=16,size=3)
 
 
   png(paste0("./crude_labels_da_plot_",contrast_name,"_.png"),res=300,units="in",height=3,width=3)
@@ -218,26 +231,26 @@ b_cells@meta.data$phenotype = factor(b_cells@meta.data$phenotype,levels=c("NIND"
 # proportion plots
 png("./crude_labels_proportion_cell_counts_barplot.png",res=300,width=7,height=4,units="in")
 ggplot(b_cells@meta.data,aes(phenotype,fill=cell_type))+
-geom_bar(position="fill",color="black")+
-facet_wrap(~source)+
-scale_fill_manual(values = colour_pal)+
-theme_classic()+
-labs(x="Phenotype",y="Proportion",fill="Cell type")
+  geom_bar(position="fill",color="black")+
+  facet_wrap(~source)+
+  scale_fill_manual(values = colour_pal)+
+  theme_classic()+
+  labs(x="Phenotype",y="Proportion",fill="Cell type")
 dev.off()
 
 plots = list()
 for(pheno in c("MS","OIND","NIND")){
-p=ggplot(b_cells@meta.data %>%
-filter(phenotype==pheno),
-aes(donor.id,fill=cell_type))+
-geom_bar(position="fill",color="black")+
-facet_wrap(~source)+
-scale_fill_manual(values = colour_pal)+
-theme_classic()+
-labs(x="Donor",y="Proportion",fill="Cell type")+
-ggtitle(pheno)+
-theme(legend.position="none",axis.text.x=element_blank())
-plots[[length(plots)+1]] = p
+  p=ggplot(b_cells@meta.data %>%
+             filter(phenotype==pheno),
+           aes(donor.id,fill=cell_type))+
+    geom_bar(position="fill",color="black")+
+    facet_wrap(~source)+
+    scale_fill_manual(values = colour_pal)+
+    theme_classic()+
+    labs(x="Donor",y="Proportion",fill="Cell type")+
+    ggtitle(pheno)+
+    theme(legend.position="none",axis.text.x=element_blank())
+  plots[[length(plots)+1]] = p
 }
 
 png("./crude_labels_proportion_cell_counts_barplot_per_individual.png",res=300,width=12,height=4,units="in")
@@ -270,7 +283,7 @@ low_counts = b_cells@meta.data %>%
 # aggregate counts
 groups = colData(b_cells.sce)[, c("ident", "phenotype","source","iid")]
 aggregated_counts  = aggregate.Matrix(t(counts(b_cells.sce)),
-groupings = groups, fun = "sum")
+                                      groupings = groups, fun = "sum")
 
 # remove groups with low cell counts for DE (<n cells)
 aggregated_counts = aggregated_counts[!rownames(aggregated_counts) %in% low_counts$donor_to_exclude,]
@@ -291,138 +304,138 @@ de_results = lapply(clusters,function(cell_type){
   de_input = filtered_matrices[[cell_type]]
 
   group_vector = lapply(colnames(de_input),function(y){
-      if(grepl("MS_PBMC",y)){
-        "MS_PBMC"
-      } else if(grepl("MS_CSF",y)){
-        "MS_CSF"
-      } else if(grepl("NIND_CSF",y)){
-        "Control_CSF"
-      } else if(grepl("NIND_PBMC",y)){
-        "Control_PBMC"
-      } else if(grepl("OIND_CSF",y)){
-        "OIND_CSF"
-      } else if(grepl("OIND_PBMC",y)){
-        "OIND_PBMC"
-      }
-    }) %>% unlist %>% factor()
-
-    # make the DGE object
-    y=DGEList(de_input,group=group_vector,remove.zeros=TRUE)
-
-    # update sample info
-    y$samples =  y$samples %>% mutate(full_cell_id = rownames(y$samples)) %>%
-      left_join(b_cells@meta.data %>%
-        dplyr::select(Age,Sex,full_cell_id) %>%
-        distinct(full_cell_id,.keep_all=TRUE),by="full_cell_id")
-
-    # make the design matrix
-    message("Doing DE for ",cell_type)
-    design = model.matrix(~0+group_vector+Age+Sex,y$samples)
-    colnames(design) = c(levels(group_vector),"Age","Sex")
-
-
-    keep = filterByExpr(
-      y,
-      design = design,
-      group = group_vector,
-      min.count = 10,
-      min.total.count = 15,
-      large.n = 10,
-      min.prop = 0.7)
-    y = y[keep, , keep.lib.sizes=FALSE]
-    y = calcNormFactors(y)
-    y = estimateDisp(y,design,robust=TRUE)
-    fit = glmQLFit(y, design, robust=TRUE)
-
-    # define contrast for testing
-
-    contrast =  if(length((unique(y$samples$group)))==6){
-      makeContrasts(
-        MS_CSF - MS_PBMC,
-        OIND_CSF - OIND_PBMC,
-        Control_CSF - Control_PBMC,
-        MS_CSF - OIND_CSF,
-        MS_CSF - Control_CSF,
-        OIND_CSF - Control_CSF,
-        MS_PBMC - OIND_PBMC,
-        MS_PBMC - Control_PBMC,
-        OIND_PBMC - Control_PBMC,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==5 & (!("Control_CSF" %in% unique(y$samples$group)))){
-      makeContrasts(
-        MS_CSF - MS_PBMC,
-        OIND_CSF - OIND_PBMC,
-        MS_CSF - OIND_CSF,
-        MS_PBMC - OIND_PBMC,
-        MS_PBMC - Control_PBMC,
-        OIND_PBMC - Control_PBMC,
-        levels = design
-      )
-    }  else if(length((unique(y$samples$group)))==5 & (!("Control_PBMC" %in% unique(y$samples$group)))){
-      makeContrasts(
-        MS_CSF - MS_PBMC,
-        OIND_CSF - OIND_PBMC,
-        MS_CSF - OIND_CSF,
-        MS_PBMC - OIND_PBMC,
-        MS_CSF - Control_CSF,
-        OIND_CSF - Control_CSF,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==4 & !("Control_PBMC" %in% unique(y$samples$group)) & !("Control_CSF" %in% unique(y$samples$group))){
-      makeContrasts(
-        MS_CSF - MS_PBMC,
-        OIND_CSF - OIND_PBMC,
-        MS_CSF - OIND_CSF,
-        MS_PBMC - OIND_PBMC,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==5 & (!("OIND_CSF" %in% unique(y$samples$group)))){
-        makeContrasts(
-        MS_CSF - MS_PBMC,
-        Control_CSF - Control_PBMC,
-        MS_CSF - Control_CSF,
-        MS_PBMC - OIND_PBMC,
-        MS_PBMC - Control_PBMC,
-        OIND_PBMC - Control_PBMC,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==4 & !("OIND_PBMC" %in% unique(y$samples$group)) & !("OIND_CSF" %in% unique(y$samples$group))){
-      makeContrasts(
-        MS_CSF - MS_PBMC,
-        Control_CSF - Control_PBMC,
-        MS_CSF - Control_CSF,
-        MS_PBMC - Control_PBMC,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==4 & !("Control_CSF" %in% unique(y$samples$group)) & !("OIND_CSF" %in% unique(y$samples$group))){
-      makeContrasts(
-        MS_CSF - MS_PBMC,
-        MS_PBMC - OIND_PBMC,
-        MS_PBMC - Control_PBMC,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==3 & !("OIND_PBMC" %in% unique(y$samples$group)) & !("Control_PBMC" %in% unique(y$samples$group))){
-      makeContrasts(
-        MS_CSF - MS_PBMC,
-        MS_CSF - OIND_CSF,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==3 & !("OIND_CSF" %in% unique(y$samples$group)) & !("Control_PBMC" %in% unique(y$samples$group))){
-      makeContrasts(
-        MS_CSF - MS_PBMC,
-        MS_PBMC - OIND_PBMC,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==2){
-      makeContrasts(
-        MS_CSF - MS_PBMC,
-        levels = design
-      )
+    if(grepl("MS_PBMC",y)){
+      "MS_PBMC"
+    } else if(grepl("MS_CSF",y)){
+      "MS_CSF"
+    } else if(grepl("NIND_CSF",y)){
+      "Control_CSF"
+    } else if(grepl("NIND_PBMC",y)){
+      "Control_PBMC"
+    } else if(grepl("OIND_CSF",y)){
+      "OIND_CSF"
+    } else if(grepl("OIND_PBMC",y)){
+      "OIND_PBMC"
     }
+  }) %>% unlist %>% factor()
 
-    # do de tests
-    for(i in 1:length(colnames(contrast))){
+  # make the DGE object
+  y=DGEList(de_input,group=group_vector,remove.zeros=TRUE)
+
+  # update sample info
+  y$samples =  y$samples %>% mutate(full_cell_id = rownames(y$samples)) %>%
+    left_join(b_cells@meta.data %>%
+                dplyr::select(Age,Sex,full_cell_id) %>%
+                distinct(full_cell_id,.keep_all=TRUE),by="full_cell_id")
+
+  # make the design matrix
+  message("Doing DE for ",cell_type)
+  design = model.matrix(~0+group_vector+Age+Sex,y$samples)
+  colnames(design) = c(levels(group_vector),"Age","Sex")
+
+
+  keep = filterByExpr(
+    y,
+    design = design,
+    group = group_vector,
+    min.count = 10,
+    min.total.count = 15,
+    large.n = 10,
+    min.prop = 0.7)
+  y = y[keep, , keep.lib.sizes=FALSE]
+  y = calcNormFactors(y)
+  y = estimateDisp(y,design,robust=TRUE)
+  fit = glmQLFit(y, design, robust=TRUE)
+
+  # define contrast for testing
+
+  contrast =  if(length((unique(y$samples$group)))==6){
+    makeContrasts(
+      MS_CSF - MS_PBMC,
+      OIND_CSF - OIND_PBMC,
+      Control_CSF - Control_PBMC,
+      MS_CSF - OIND_CSF,
+      MS_CSF - Control_CSF,
+      OIND_CSF - Control_CSF,
+      MS_PBMC - OIND_PBMC,
+      MS_PBMC - Control_PBMC,
+      OIND_PBMC - Control_PBMC,
+      levels = design
+    )
+  } else if(length((unique(y$samples$group)))==5 & (!("Control_CSF" %in% unique(y$samples$group)))){
+    makeContrasts(
+      MS_CSF - MS_PBMC,
+      OIND_CSF - OIND_PBMC,
+      MS_CSF - OIND_CSF,
+      MS_PBMC - OIND_PBMC,
+      MS_PBMC - Control_PBMC,
+      OIND_PBMC - Control_PBMC,
+      levels = design
+    )
+  }  else if(length((unique(y$samples$group)))==5 & (!("Control_PBMC" %in% unique(y$samples$group)))){
+    makeContrasts(
+      MS_CSF - MS_PBMC,
+      OIND_CSF - OIND_PBMC,
+      MS_CSF - OIND_CSF,
+      MS_PBMC - OIND_PBMC,
+      MS_CSF - Control_CSF,
+      OIND_CSF - Control_CSF,
+      levels = design
+    )
+  } else if(length((unique(y$samples$group)))==4 & !("Control_PBMC" %in% unique(y$samples$group)) & !("Control_CSF" %in% unique(y$samples$group))){
+    makeContrasts(
+      MS_CSF - MS_PBMC,
+      OIND_CSF - OIND_PBMC,
+      MS_CSF - OIND_CSF,
+      MS_PBMC - OIND_PBMC,
+      levels = design
+    )
+  } else if(length((unique(y$samples$group)))==5 & (!("OIND_CSF" %in% unique(y$samples$group)))){
+    makeContrasts(
+      MS_CSF - MS_PBMC,
+      Control_CSF - Control_PBMC,
+      MS_CSF - Control_CSF,
+      MS_PBMC - OIND_PBMC,
+      MS_PBMC - Control_PBMC,
+      OIND_PBMC - Control_PBMC,
+      levels = design
+    )
+  } else if(length((unique(y$samples$group)))==4 & !("OIND_PBMC" %in% unique(y$samples$group)) & !("OIND_CSF" %in% unique(y$samples$group))){
+    makeContrasts(
+      MS_CSF - MS_PBMC,
+      Control_CSF - Control_PBMC,
+      MS_CSF - Control_CSF,
+      MS_PBMC - Control_PBMC,
+      levels = design
+    )
+  } else if(length((unique(y$samples$group)))==4 & !("Control_CSF" %in% unique(y$samples$group)) & !("OIND_CSF" %in% unique(y$samples$group))){
+    makeContrasts(
+      MS_CSF - MS_PBMC,
+      MS_PBMC - OIND_PBMC,
+      MS_PBMC - Control_PBMC,
+      levels = design
+    )
+  } else if(length((unique(y$samples$group)))==3 & !("OIND_PBMC" %in% unique(y$samples$group)) & !("Control_PBMC" %in% unique(y$samples$group))){
+    makeContrasts(
+      MS_CSF - MS_PBMC,
+      MS_CSF - OIND_CSF,
+      levels = design
+    )
+  } else if(length((unique(y$samples$group)))==3 & !("OIND_CSF" %in% unique(y$samples$group)) & !("Control_PBMC" %in% unique(y$samples$group))){
+    makeContrasts(
+      MS_CSF - MS_PBMC,
+      MS_PBMC - OIND_PBMC,
+      levels = design
+    )
+  } else if(length((unique(y$samples$group)))==2){
+    makeContrasts(
+      MS_CSF - MS_PBMC,
+      levels = design
+    )
+  }
+
+  # do de tests
+  for(i in 1:length(colnames(contrast))){
     contrast_name = colnames(contrast)[i]
     res = glmQLFTest(fit, contrast = contrast[,i])
 
@@ -447,14 +460,14 @@ de_results = lapply(clusters,function(cell_type){
     # de plot
     colours = c("Up" = "red", "Down" = "blue", "nonsig" = "grey")
     plot = ggplot(res,aes(logFC,-log10(PValue),color=direction,label=gene))+
-    theme_bw()+
-    geom_point()+
-    NoLegend()+
-    geom_label_repel(data=res %>% arrange(PValue) %>% head(n=10),mapping=aes(),max.overlaps=500)+
-    ggtitle(paste0(cell_type,":", comparison_label))+
-    scale_color_manual(values = colours)+
-    scale_x_continuous(limits=c(-12,12))+
-    scale_y_continuous(limits=c(0,20))
+      theme_bw()+
+      geom_point()+
+      NoLegend()+
+      geom_label_repel(data=res %>% arrange(PValue) %>% head(n=10),mapping=aes(),max.overlaps=500)+
+      ggtitle(paste0(cell_type,":", comparison_label))+
+      scale_color_manual(values = colours)+
+      scale_x_continuous(limits=c(-12,12))+
+      scale_y_continuous(limits=c(0,20))
 
     png(paste0("de_plot_",contrast_name,"_",cell_type,".png"),res=300,units="in",height=4,width=4)
     print(plot)
@@ -486,11 +499,97 @@ results_df$variable = str_remove(results_df$variable,pattern="QLF...")
 results_df = results_df %>% filter(!grepl("N.genes.tested",variable))
 
 p1=ggplot(results_df,aes(Cell.type,value,fill=variable,label=value))+
-facet_wrap(~Comparison,ncol=3)+
-geom_col()+theme_classic() + theme(axis.text.x=element_text(angle=90))+labs(y="n genes",x="Cell type", fill="Key")+scale_fill_brewer(palette="Set2")
+  facet_wrap(~Comparison,ncol=3)+
+  geom_col()+theme_classic() + theme(axis.text.x=element_text(angle=90))+labs(y="n genes",x="Cell type", fill="Key")+scale_fill_brewer(palette="Set2")
 png(paste0("overall_de_gene_count_plot.png"),res=300,units="in",height=8,width=8)
 p1
 dev.off()
+
+
+# summary plots
+# list files
+files = list.files(pattern="edgeR_de",full.names=T)
+
+# read in files
+de_res = purrr::map(files,function(x){
+  y = str_remove(str_remove(x,"./edgeR_de_tests_"),".csv")
+  cell = str_split(y,"_")[[1]][4]
+  y = str_remove(y,paste0("_",cell))
+  read_csv(x) %>%
+    mutate(contrast = y, cell_type = cell)
+})
+
+# combine
+de_res = do.call("bind_rows",de_res)
+
+# recalculate P_adj with strict Bonferroni
+de_res = de_res %>%
+  mutate(P_adj = p.adjust(PValue,method="bonf"))
+
+# summary numbers
+plot_dat = de_res %>%
+  group_by(contrast,cell_type) %>%
+  mutate(sig = ifelse(P_adj < 0.05, "Y","N")) %>%
+  dplyr::count(sig) %>%
+  mutate(prop = n/sum(n)) %>%
+  mutate(total = sum(n)) %>%
+  filter(sig=="Y") %>%
+  mutate(orig_contrast = contrast) %>%
+  tidyr::separate(contrast,sep=" - ",into=c("pheno1","pheno2")) %>%
+  filter(grepl("CSF",pheno1) & grepl("PBMC",pheno2)) %>%
+  tidyr::separate(pheno1,"_",into=c("pheno","other"))
+
+plot_dat %>% filter(pheno=="MS") %>% arrange(prop)
+plot_dat %>% filter(pheno=="MS") %>% arrange(prop) %>% ungroup %>%summarise(median(prop))
+
+ggplot(plot_dat,aes(cell_type,prop*100,fill=pheno))+
+  geom_col(color="black",position=position_dodge())+
+  theme_minimal()+
+  scale_fill_brewer(palette="Set1")
+
+# define function to make plots
+make_plot = function(comparison = "MS_CSF - OIND_CSF"){
+
+  # initialise plot list
+  plots = list()
+  res_overall = list()
+  # loop through cell types
+  for(this_cell_type in unique(de_res$cell_type)){
+
+
+    # plot
+    de_res = de_res %>%
+      mutate(
+        direction = case_when(
+          P_adj < 0.05 & logFC>0 ~ "Up",
+          P_adj < 0.05 & logFC<0 ~ "Down",
+          P_adj >=0.05 ~ "nonsig"
+        ))
+    # de plot
+    colours = c("Up" = "red", "Down" = "blue", "nonsig" = "grey")
+    plot_dat = de_res %>% filter(contrast == comparison & cell_type == this_cell_type)
+    p=ggplot(plot_dat,aes(logFC,-log10(PValue),color=direction,label=gene))+
+      theme_bw()+
+      geom_point()+
+      ggrepel::geom_text_repel(data = plot_dat %>% filter(P_adj<0.05) %>% arrange(PValue) %>% filter(logFC>1) %>% head(5))+
+      scale_color_manual(values = colours)+
+      ggtitle(str_remove_all(this_cell_type,"_"))+
+      theme(legend.position = "none")
+
+    plots[[length(plots)+1]] = p
+    res_overall[[length(res_overall)+1]] = plot_dat
+  }
+
+
+  png(paste0("de_",comparison,".png"),res=600,units="in",height=6,width=6)
+  print(gridExtra::grid.arrange(grobs = plots, top = comparison))
+  dev.off()
+  res_overall = do.call("bind_rows",res_overall)
+  write_csv(res_overall,paste0("de_",comparison,".csv"))
+}
+make_plot("MS_CSF - OIND_CSF")
+make_plot("MS_CSF - MS_PBMC")
+make_plot("MS_CSF - OIND_CSF")
 
 #######################################
 # GSEA
@@ -571,9 +670,9 @@ do_gsea = function(geneset = "hallmark"){
           path_name = sig_pathways$pathway[i] %>% str_remove("HALLMARK_")
           png(paste0(path_name,"_",cluster,"_",comparison,"gsea_heatmap.png"),res=300,width=8,height=8,units="in")
           DoHeatmap(subset(b_cells, cell_type==cluster & phenotype=="MS"),
-          features=leading_edge,
-          slot="data",
-          group.by="source")
+                    features=leading_edge,
+                    slot="data",
+                    group.by="source")
           dev.off()
 
         }
@@ -607,7 +706,7 @@ for(x in c( "MS CSF vs MS PBMC","MS CSF vs Control CSF","Control CSF vs Control 
   plot_data$pathway = factor(plot_data$pathway,levels=unique(plot_data$pathway))
   plot_data$cell_type = factor(plot_data$cell_type,levels=c("Naive B cells","Memory B cells","Plasma cells"),ordered=TRUE)
 
-  png(paste0("summary_",x,".png"),res=300,units="in",width=6,height=6)
+  png(paste0("summary_",x,".png"),res=300,units="in",width=7,height=4)
   p=ggplot(plot_data,aes(cell_type,pathway,fill=NES,label=ifelse(padj<0.01,ifelse(padj<0.001,ifelse(padj<0.0001,"***","**"),"*"),"")))+
     geom_tile(color="black")+
     geom_text()+
@@ -626,10 +725,30 @@ for(x in c( "MS CSF vs MS PBMC","MS CSF vs Control CSF","Control CSF vs Control 
 #do_gsea("reactome")
 
 #######################################
+# CCL22
+#######################################
+DefaultAssay(b_cells) = "SCT"
+FeaturePlot(b_cells,features=c("CCL22"))
+
+ccl22 = subset(b_cells,CCL22 > 0)
+
+
+b_cells@meta.data = b_cells@meta.data %>%
+mutate(ccl22 = ifelse(
+  cell_id %in% ccl22@meta.data$cell_id,
+  "yes",
+  "no"
+  ))
+b_cells = SetIdent(b_cells,value="ccl22")
+rownames(b_cells@meta.data) = colnames(b_cells)
+markers = FindMarkers(b_cells,ident.1="yes",recorrect_umi=F,logfc.threshold=1,min.pct=0.5)
+
+
+
+#######################################
 # Repertoire analysis CSF v periphery
 #######################################
 rownames(b_cells@meta.data) = colnames(b_cells)
-
 
 # define clones
 expanded_clones = b_cells@meta.data %>%
@@ -637,6 +756,7 @@ expanded_clones = b_cells@meta.data %>%
   dplyr::count() %>%
   filter(n>1) %>%
   mutate(donor_clone = paste0(iid,"_",clone_id))
+
 b_cells@meta.data = b_cells@meta.data %>%
   mutate(donor_clone = paste0(iid,"_",clone_id)) %>%
   mutate(expanded_clone = ifelse(donor_clone %in% expanded_clones$donor_clone,"Expanded","Not expanded"))
@@ -647,37 +767,57 @@ b_cells@meta.data$ighv_family = sapply(b_cells@meta.data$v_call_genotyped_VDJ,fu
   return(y)
 })
 
+b_cells@meta.data$iglightchain_family = sapply(b_cells@meta.data$v_call_genotyped_VJ,function(x){
+  y=str_split(x,pattern="-",n=2)[[1]][1]
+  return(y)
+})
+
+
 # cdr3 length
 b_cells@meta.data = b_cells@meta.data %>% mutate(cdr3_length = nchar(junction_aa_VDJ))
 
 ## plots
+# define plot theme
+theme_umap = function(){
+  theme_minimal() %+replace%
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks = element_blank(),
+      plot.title=element_blank(),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text.x = element_blank(),
+      axis.text.y = element_blank()
+    )
+}
 
 # cell types
 # compare csf vs periphery
 png("csf_v_pbmc_celltypes.png",res=300,height=3,width=6,units="in")
 DimPlot(b_cells,split.by="source")+scale_color_manual(values = colour_pal)+
-theme(axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  theme_umap()
 dev.off()
 
 ## isotypes
 png("csf_v_pbmc_isotypes.png",res=300,height=3,width=6,units="in")
 DimPlot(b_cells,split.by="source",group.by="isotype")+scale_color_manual(values = colour_pal)+
-theme(axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-dev.off()
+theme_umap()
+  dev.off()
 
 ## ighv
 png("csf_v_pbmc_ighv.png",res=300,height=3,width=6,units="in")
 DimPlot(b_cells,split.by="source",group.by="ighv_family")+scale_color_manual(values = colour_pal)+
-theme(axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-dev.off()
+  theme_umap()
+
+  dev.off()
 
 
 # compare csf vs periphery - just ms
 csf_v_pbmc_plot = function(x){
-DimPlot(subset(b_cells,phenotype=="MS"),split.by="source",group.by=x)+
-scale_color_manual(values = colour_pal)+
-theme_minimal()+
-theme(axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  DimPlot(subset(b_cells,phenotype=="MS"),split.by="source",group.by=x)+
+    scale_color_manual(values = colour_pal)+
+    theme_umap()
 }
 var_list = list("cell_type","expanded_clone","shm_positive","isotype","ighv_family","status_summary")
 plot_list = lapply(var_list,csf_v_pbmc_plot)
@@ -690,20 +830,20 @@ dev.off()
 # bar plots
 make_categorical_plot = function(x){
   ggplot(b_cells@meta.data,aes(phenotype,fill=b_cells@meta.data[[x]]))+
-  geom_bar(position="fill",color="black")+
-  facet_wrap(~source)+
-  theme_bw()+
-  scale_fill_brewer(palette = "Set3")+
-  labs(x="Phenotype",fill=x,y="Proportion")
+    geom_bar(position="fill",color="black")+
+    facet_wrap(~source)+
+    theme_bw()+
+    scale_fill_brewer(palette = "Set3")+
+    labs(x="Phenotype",fill=x,y="Proportion")
 }
 
 make_continuous_plot = function(x){
   ggplot(b_cells@meta.data,aes(phenotype,fill=cell_type,y=b_cells@meta.data[[x]]))+
-  geom_boxplot(color="black")+
-  facet_wrap(~source)+
-  theme_bw()+
-  scale_fill_brewer(palette = "Set3")+
-  labs(x="Phenotype",y=x)
+    geom_boxplot(color="black")+
+    facet_wrap(~source)+
+    theme_bw()+
+    scale_fill_brewer(palette = "Set3")+
+    labs(x="Phenotype",y=x)
 }
 
 var_list = list("expanded_clone","shm_positive","isotype","ighv_family","status_summary","c_call_VDJ")
@@ -726,13 +866,13 @@ do_da_var = function(x, contrasts_to_test,variable,ylim=10, data = b_cells@meta.
 
   # stash sample info
   sample_info = da_dat %>%
-  dplyr::select(iid,source,x,donor_source) %>%
-  filter(!is.na(.data[[x]])) %>%
-  distinct(donor_source,.keep_all=TRUE)
+    dplyr::select(iid,source,x,donor_source) %>%
+    filter(!is.na(.data[[x]])) %>%
+    distinct(donor_source,.keep_all=TRUE)
 
   data_for_abundances = da_dat %>%
-  dplyr::select(iid,source,x,donor_source,.data[[variable]]) %>%
-  filter(!is.na(.data[[x]]))
+    dplyr::select(iid,source,x,donor_source,.data[[variable]]) %>%
+    filter(!is.na(.data[[x]]))
   abundances = table(data_for_abundances[[variable]],data_for_abundances$donor_source)
 
   # filter out clusters with <10 counts
@@ -747,8 +887,8 @@ do_da_var = function(x, contrasts_to_test,variable,ylim=10, data = b_cells@meta.
 
   # update sample info
   y.ab$samples =  y.ab$samples %>% left_join(da_dat %>%
-  filter(!is.na(.data[[x]])) %>%
-  distinct(donor_source,.keep_all=TRUE) %>% dplyr::select(Age,Sex,donor_source),by="donor_source")
+                                               filter(!is.na(.data[[x]])) %>%
+                                               distinct(donor_source,.keep_all=TRUE) %>% dplyr::select(Age,Sex,donor_source),by="donor_source")
 
   da_overall_list = list()
   results_df = data.frame()
@@ -776,187 +916,227 @@ do_da_var = function(x, contrasts_to_test,variable,ylim=10, data = b_cells@meta.
     res = res$table %>% mutate(P_adj = p.adjust(PValue,method="fdr")) %>% arrange(PValue)
     res$cell = rownames(res)
     res$significant = ifelse(res$P_adj<0.01,"yes","no")
-    res$direction = ifelse(res$logFC>0,"Up","Down")
+    res = res %>%
+      mutate(direction = case_when(
+        P_adj > 0.05 ~ "nonsig",
+        P_adj <= 0.05 & logFC>0 ~ "Up",
+        P_adj <= 0.05 & logFC<0 ~ "Down"
+        ))
+
     comparison_label = contrast_name
 
+    colours = c("Up" = "red", "Down" = "blue","nonsig"="grey")
+
     # da plot
-    plot = ggplot(res,aes(logFC,-log10(PValue),label=cell))+
-    theme_classic()+
-    geom_text_repel(data = res %>% filter(P_adj<0.05),
-      mapping = aes(logFC,-log10(PValue)),
-      size=3,max.overlaps=100)+
-    geom_hline(yintercept= -log10(0.05/length(res$logFC)),alpha=0.2)+
-    geom_vline(xintercept = 0,alpha=0.2)+
-    NoLegend()+
-    ggtitle(comparison_label)+
-    scale_y_continuous(limits=c(0,ylim))+
-    scale_x_continuous(limits=c(-5,5))+
-    geom_point(shape=16,size=2)
+    plot = ggplot(res,aes(logFC,-log10(PValue),label=cell, colour = direction))+
+      theme_classic()+
+      geom_point(shape=16,size=2)+
+      geom_text_repel(data = res %>% filter(P_adj<0.05),
+                      mapping = aes(logFC,-log10(PValue)),
+                      size=3,max.overlaps=100,max.time = 10,max.iter = 100000)+
+      geom_hline(yintercept= -log10(0.05/length(res$logFC)),alpha=0.2)+
+      geom_vline(xintercept = 0,alpha=0.2)+
+      NoLegend()+
+      ggtitle(comparison_label)+
+      scale_y_continuous(limits=c(0,ylim))+
+      scale_x_continuous(limits=c(-5,5))+
+      scale_color_manual(values = colours)
 
 
-    png(paste0(plot_title,"_pheno_comparisons_da_plot_",contrast_name,"_",variable,".png"),res=300,units="in",height=3,width=3)
+    png(paste0(plot_title,"_pheno_comparisons_da_plot_",contrast_name,"_",variable,".png"),res=600,units="in",height=3,width=3)
     print(plot)
     dev.off()
     write_csv(res,
-    file=paste0(plot_title,"_pheno_comparisons_da_plot_",contrast_name,"_",variable,".csv"))
+              file=paste0(plot_title,"_pheno_comparisons_da_plot_",contrast_name,"_",variable,".csv"))
   }
 }
 
 # run DA
 do_da_var(x = "phenotype",
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "OIND_CSF - OIND_PBMC",
-  "NIND_CSF - NIND_PBMC",
-  "MS_PBMC - OIND_PBMC",
-  "MS_PBMC - NIND_PBMC",
-  "MS_CSF - OIND_CSF",
-  "MS_CSF - NIND_CSF"),
-variable="ighv_family",
-plot_title = "all",
-ylim=20)
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "OIND_CSF - OIND_PBMC",
+                                "NIND_CSF - NIND_PBMC",
+                                "MS_PBMC - OIND_PBMC",
+                                "MS_PBMC - NIND_PBMC",
+                                "MS_CSF - OIND_CSF",
+                                "MS_CSF - NIND_CSF"),
+          variable="ighv_family",
+          plot_title = "all",
+          ylim=20)
 
 # repeat, sampling each clone only once
 do_da_var(data = b_cells@meta.data %>% mutate(donor_clone_source = paste0(donor_clone,"_",source)) %>% distinct(donor_clone_source,.keep_all=TRUE)
-,
-x = "phenotype",
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "OIND_CSF - OIND_PBMC",
-  "NIND_CSF - NIND_PBMC",
-  "MS_PBMC - OIND_PBMC",
-  "MS_PBMC - NIND_PBMC",
-  "MS_CSF - OIND_CSF",
-  "MS_CSF - NIND_CSF"),
-variable="ighv_family",
-plot_title = "eachclone",
-ylim=20)
+          ,
+          x = "phenotype",
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "OIND_CSF - OIND_PBMC",
+                                "NIND_CSF - NIND_PBMC",
+                                "MS_PBMC - OIND_PBMC",
+                                "MS_PBMC - NIND_PBMC",
+                                "MS_CSF - OIND_CSF",
+                                "MS_CSF - NIND_CSF"),
+          variable="ighv_family",
+          plot_title = "eachclone",
+          ylim=20)
+
+
+# simplify v call
+all_calls = list()
+for(i in c(1:length(b_cells@meta.data$v_call_genotyped_VDJ))){
+message(i)
+this_call = b_cells@meta.data$v_call_genotyped_VDJ[i]
+
+# take first call if ambiguous
+this_call = str_split(this_call,"\\|",2)[[1]][1]
+
+# split to simple call
+this_call = ifelse(str_count(this_call,"-")>1,
+  paste0(str_split(this_call,"-")[[1]][1],"-",str_split(this_call,"-")[[1]][2]),
+  this_call
+)
+all_calls[[i]] = this_call
+}
+
+# add to metadata
+b_cells@meta.data$v_call_simple = unlist(all_calls)
 
 # individual gene segments
-do_da_var(x = "phenotype",
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "MS_CSF - OIND_CSF"),
-variable="v_call_genotyped_VDJ",
-plot_title = "all",
-ylim=20)
+do_da_var(data = b_cells@meta.data %>%
+            mutate(donor_clone_source = paste0(donor_clone,"_",source)) %>%
+            distinct(donor_clone_source,.keep_all=TRUE),
+          x = "phenotype",
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "MS_CSF - OIND_CSF"),
+          variable="v_call_simple",
+          plot_title = "eachclone",
+          ylim=20)
 
-# light chain
-do_da_var(x = "phenotype",
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "MS_CSF - OIND_CSF"),
-variable="v_call_genotyped_VJ",
-plot_title = "lightchain",
-ylim=20)
+
+
+# light chain family
+do_da_var(data = b_cells@meta.data %>% mutate(donor_clone_source = paste0(donor_clone,"_",source)) %>% distinct(donor_clone_source,.keep_all=TRUE)
+          ,
+          x = "phenotype",
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "MS_CSF - OIND_CSF"),
+          variable="iglightchain_family",
+          plot_title = "lightchain_family_eachclone",
+          ylim=20)
+
+
 
 do_da_var(data = b_cells@meta.data %>% mutate(donor_clone_source = paste0(donor_clone,"_",source)) %>% distinct(donor_clone_source,.keep_all=TRUE)
-,
-x = "phenotype",
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "MS_CSF - OIND_CSF"),
-variable="v_call_genotyped_VJ",
-plot_title = "lightchain_eachclone",
-ylim=20)
+          ,
+          x = "phenotype",
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "MS_CSF - OIND_CSF"),
+          variable="v_call_genotyped_VJ",
+          plot_title = "lightchain_eachclone",
+          ylim=20)
 
 
 # cell-type specific
 do_da_var(x = "phenotype",
-data = b_cells@meta.data %>% filter(cell_type == "Plasma cells")
-,
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "MS_CSF - OIND_CSF",
-  "MS_PBMC - NIND_PBMC"),
-variable="ighv_family",
-plot_title = "plasmacells",
-ylim=20)
+          data = b_cells@meta.data %>% filter(cell_type == "Plasma cells")
+          ,
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "MS_CSF - OIND_CSF",
+                                "MS_PBMC - NIND_PBMC"),
+          variable="ighv_family",
+          plot_title = "plasmacells",
+          ylim=20)
 
 # cell-type specific
 do_da_var(x = "phenotype",
-data = b_cells@meta.data %>% filter(cell_type == "Memory B cells")
-,
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "MS_CSF - OIND_CSF",
-    "MS_PBMC - NIND_PBMC"),
-variable="ighv_family",
-plot_title = "memb",
-ylim=20)
+          data = b_cells@meta.data %>% filter(cell_type == "Memory B cells")
+          ,
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "MS_CSF - OIND_CSF",
+                                "MS_PBMC - NIND_PBMC"),
+          variable="ighv_family",
+          plot_title = "memb",
+          ylim=20)
 
 # cell-type specific
 do_da_var(x = "phenotype",
-data = b_cells@meta.data %>% filter(cell_type == "Naive B cells")
-,
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "MS_CSF - OIND_CSF",
-  "MS_PBMC - NIND_PBMC"),
-variable="ighv_family",
-plot_title = "naive",
-ylim=20)
+          data = b_cells@meta.data %>% filter(cell_type == "Naive B cells")
+          ,
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "MS_CSF - OIND_CSF",
+                                "MS_PBMC - NIND_PBMC"),
+          variable="ighv_family",
+          plot_title = "naive",
+          ylim=20)
 
 #######################################
 #  Isotypes
 #######################################
 
-do_da_var(x = "phenotype",
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "OIND_CSF - OIND_PBMC",
-  "NIND_CSF - NIND_PBMC",
-  "MS_PBMC - OIND_PBMC",
-  "MS_PBMC - NIND_PBMC",
-  "MS_CSF - OIND_CSF",
-  "MS_CSF - NIND_CSF"),
-variable="c_call_VDJ",
-plot_title = "isotypes",
-ylim=50)
+do_da_var(data = b_cells@meta.data %>% mutate(donor_clone_source = paste0(donor_clone,"_",source)) %>% distinct(donor_clone_source,.keep_all=TRUE),
+          x = "phenotype",
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "OIND_CSF - OIND_PBMC",
+                                "NIND_CSF - NIND_PBMC",
+                                "MS_PBMC - OIND_PBMC",
+                                "MS_PBMC - NIND_PBMC",
+                                "MS_CSF - OIND_CSF",
+                                "MS_CSF - NIND_CSF"),
+          variable="c_call_VDJ",
+          plot_title = "isotypes",
+          ylim=50)
 
 do_da_var(x = "phenotype",
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "OIND_CSF - OIND_PBMC",
-  "NIND_CSF - NIND_PBMC",
-  "MS_PBMC - OIND_PBMC",
-  "MS_PBMC - NIND_PBMC",
-  "MS_CSF - OIND_CSF",
-  "MS_CSF - NIND_CSF"),
-variable="c_call_VJ",
-plot_title = "isotypes",
-ylim=50)
-
-# cell types
-do_da_var(x = "phenotype",
-data = b_cells@meta.data %>% filter(cell_type == "Naive B cells")
-,
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "OIND_CSF - OIND_PBMC",
-  "NIND_CSF - NIND_PBMC",
-  "MS_PBMC - OIND_PBMC",
-  "MS_PBMC - NIND_PBMC",
-  "MS_CSF - OIND_CSF",
-  "MS_CSF - NIND_CSF"),
-variable="c_call_VDJ",
-plot_title = "naive",
-ylim=50)
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "OIND_CSF - OIND_PBMC",
+                                "NIND_CSF - NIND_PBMC",
+                                "MS_PBMC - OIND_PBMC",
+                                "MS_PBMC - NIND_PBMC",
+                                "MS_CSF - OIND_CSF",
+                                "MS_CSF - NIND_CSF"),
+          variable="c_call_VJ",
+          plot_title = "isotypes",
+          ylim=20)
 
 # cell types
 do_da_var(x = "phenotype",
-data = b_cells@meta.data %>% filter(cell_type == "Plasma cells")
-,
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "OIND_CSF - OIND_PBMC",
-  "MS_PBMC - OIND_PBMC",
-  "MS_PBMC - NIND_PBMC",
-  "MS_CSF - OIND_CSF"),
-variable="c_call_VDJ",
-plot_title = "plasmacells",
-ylim=50)
+          data = b_cells@meta.data %>% filter(cell_type == "Naive B cells")
+          ,
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "OIND_CSF - OIND_PBMC",
+                                "NIND_CSF - NIND_PBMC",
+                                "MS_PBMC - OIND_PBMC",
+                                "MS_PBMC - NIND_PBMC",
+                                "MS_CSF - OIND_CSF",
+                                "MS_CSF - NIND_CSF"),
+          variable="c_call_VDJ",
+          plot_title = "naive",
+          ylim=50)
 
 # cell types
 do_da_var(x = "phenotype",
-data = b_cells@meta.data %>% filter(cell_type == "Memory B cells")
-,
-contrasts_to_test = c("MS_CSF - MS_PBMC",
-  "OIND_CSF - OIND_PBMC",
-  "MS_PBMC - OIND_PBMC",
-  "MS_PBMC - NIND_PBMC",
-  "MS_CSF - OIND_CSF"),
-variable="c_call_VDJ",
-plot_title = "memb",
-ylim=50)
+          data = b_cells@meta.data %>% filter(cell_type == "Plasma cells")
+          ,
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "OIND_CSF - OIND_PBMC",
+                                "MS_PBMC - OIND_PBMC",
+                                "MS_PBMC - NIND_PBMC",
+                                "MS_CSF - OIND_CSF"),
+          variable="c_call_VDJ",
+          plot_title = "plasmacells",
+          ylim=50)
+
+# cell types
+do_da_var(x = "phenotype",
+          data = b_cells@meta.data %>% filter(cell_type == "Memory B cells")
+          ,
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "OIND_CSF - OIND_PBMC",
+                                "MS_PBMC - OIND_PBMC",
+                                "MS_PBMC - NIND_PBMC",
+                                "MS_CSF - OIND_CSF"),
+          variable="c_call_VDJ",
+          plot_title = "memb",
+          ylim=50)
 
 #####################################
 # shm
@@ -967,14 +1147,14 @@ simplify_pval = function(x){
     is.na(x),
     "NA",
     ifelse(x<0.0001,
-    "***",
-    ifelse(x<0.001,
-    "**",
-    ifelse(x<0.01,
-    "*",
-    as.character(round(x,2))
-    ))))
-  }
+           "***",
+           ifelse(x<0.001,
+                  "**",
+                  ifelse(x<0.01,
+                         "*",
+                         as.character(round(x,2))
+                  ))))
+}
 
 # quantify clonality of csf
 binary_comparison = function(variable,plot_title,level="Yes"){
@@ -1023,7 +1203,7 @@ binary_comparison(variable = "shm_positive",plot_title="SHM")
 # repeat, cell-type specific
 binary_comparison_celltypes = function(variable,plot_title,level="Yes"){
   props = b_cells@meta.data %>%
-  filter(cell_type %in% c("Naive B cells","Plasma cells","Memory B cells")) %>%
+    filter(cell_type %in% c("Naive B cells","Plasma cells","Memory B cells")) %>%
     group_by(donor.id,source,phenotype,cell_type) %>%
     dplyr::count(.data[[variable]]) %>%
     mutate(prop = n/sum(n)) %>%
@@ -1034,7 +1214,7 @@ binary_comparison_celltypes = function(variable,plot_title,level="Yes"){
 
   pvals = list()
   for(i in c(1:length(phenos))){
-  message(i)
+    message(i)
     a = props[props$source=="CSF" & props$cell_pheno==phenos[i],][['prop']]
     b = props[props$source=="PBMC" & props$cell_pheno==phenos[i],][['prop']]
 
@@ -1077,7 +1257,7 @@ binary_comparison_celltypes(variable = "shm_positive",plot_title="SHM")
 # mutational load
 ##############################
 
-do_cont_comparison = function(variable, plot_title){
+do_cont_comparison = function(variable, plot_title,axislab){
   pvals = list()
 
   dat = b_cells@meta.data %>%
@@ -1099,18 +1279,17 @@ do_cont_comparison = function(variable, plot_title){
     ggtitle(plot_title)+
     geom_text(mapping = aes(x = cell_type,y = 1,label = P))+
     theme_minimal()+
-    labs(x="Cell type",y="Mutational load")
+    labs(x="Cell type",y=axislab)
 
 
   png(file=paste0(plot_title,"_comparison.png"),res=300,units="in",width=6,height=4)
   print(p)
   dev.off()
 }
-do_cont_comparison(variable = "heavychain_mu_freq_cdr_r",plot_title = "Replacement mutations")
-do_cont_comparison(variable = "heavychain_mu_freq_cdr_s",plot_title = "Silent mutations")
+do_cont_comparison(variable = "heavychain_mu_freq_cdr_r",plot_title = "Replacement mutations",axislab = "Mutational load")
+do_cont_comparison(variable = "heavychain_mu_freq_cdr_s",plot_title = "Silent mutations",axislab = "Mutational load")
 
-
-do_cont_comparison(variable = "cdr3_length",plot_title = "CDR3 length")
+do_cont_comparison(variable = "cdr3_length",plot_title = "CDR3 length",axislab = "CDR3 length")
 
 # repeat by isotype
 do_cont_comparison_by_isotype = function(variable, plot_title){
@@ -1158,10 +1337,10 @@ binary_comparison_celltypes(variable = "expanded_clone",plot_title="Clonal expan
 # compare csf in ms vs controls
 common_cell_types = c("Naive B cells","Memory B cells","Plasma cells")
 ms_v_cont_csf_plot = function(x){
-DimPlot(subset(b_cells,source=="CSF" & cell_type %in% common_cell_types),split.by="phenotype",group.by=x)+
-scale_color_brewer(palette="Set1")+
-theme_minimal()+
-theme(axis.title.x=element_blank(),axis.title.y=element_blank(),axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  DimPlot(subset(b_cells,source=="CSF" & cell_type %in% common_cell_types),split.by="phenotype",group.by=x)+
+    scale_color_brewer(palette="Set1")+
+    theme_minimal()+
+    theme(axis.title.x=element_blank(),axis.title.y=element_blank(),axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 }
 
 p0=ms_v_cont_csf_plot("cell_type")+ggtitle("Cell type")
@@ -1171,6 +1350,7 @@ grid.arrange(p0,p1)
 dev.off()
 
 # big picture numbers
+b_cells@meta.data %>% nrow
 table(b_cells@meta.data$expanded_clone)
 b_cells@meta.data %>% distinct(donor_clone) %>% nrow
 b_cells@meta.data %>% dplyr::count(expanded_clone) %>% mutate (n/sum(n))
@@ -1210,38 +1390,34 @@ b_cells@meta.data %>%
   mutate(total = sum(n), prop = n/sum(n)) %>%
   filter(donor_with_expanded_clones=="Yes")
 
-b_cells@meta.data %>%
-  group_by(phenotype) %>%
-  distinct(iid,.keep_all=T) %>%
-  dplyr::count(donor_with_expanded_clones_csf) %>%
-  mutate(total = sum(n), prop = n/sum(n)) %>%
-  filter(donor_with_expanded_clones_csf=="Yes")
-
 # histogram
-p=ggplot(b_cells@meta.data,aes(clonal_size,fill=phenotype))+geom_histogram()+theme_bw()+scale_fill_brewer(palette="Set2")+labs(x="Clone size")
+p=ggplot(b_cells@meta.data,
+         aes(clonal_size,fill=phenotype))+
+  geom_histogram()+
+  theme_bw()+
+  scale_fill_brewer(palette="Set2")+
+  labs(x="Clone size")
 png("clonal_histogram.png",res=300,height=2,width=4,units="in")
 p
 dev.off()
 
-# clonality of csf and pbmc
-b_cells@meta.data$expanded_clone = factor(b_cells@meta.data$expanded_clone,levels=c("Not expanded","Expanded"),ordered=TRUE)
-
-p1=ggplot(b_cells@meta.data %>% filter(source=="CSF"),aes(phenotype,fill=expanded_clone))+
-geom_bar(position="fill")+
-scale_fill_brewer(palette="Set2")+
-theme_bw()+
-labs(fill="Expanded clone?",x="Phenotype",y="Proportion of B cell pool")+
-png("clonal_proportions_source.png",res=300,height=4,width=4,units="in")
-p1
-dev.off()
 
 
 #######################################
 # look at relation to phenotypes
 #######################################
+# add in fine info
+b_cells@meta.data = b_cells@meta.data %>%
+  mutate(Category_fine = case_when(
+    !is.na(Category_fine) ~ Category_fine,
+    is.na(Category_fine) & phenotype=="MS" & processing_site=="TUM" & iid !="TUM_SC_19" ~ "RMS",
+    is.na(Category_fine) & phenotype=="MS" & processing_site=="TUM" & iid =="TUM_SC_19" ~ "PPMS",
+  ))
+
+
 dat = b_cells@meta.data %>%
   filter(cell_type %in% cells) %>%
-  group_by(cell_type,iid,source,phenotype) %>%
+  group_by(cell_type,iid,source,phenotype,Age,Sex,OCB,Category_fine) %>%
   dplyr::count(expanded_clone) %>%
   mutate(total = sum(n), prop = n/sum(n)) %>%
   filter(total>1 & expanded_clone=="Expanded")
@@ -1249,9 +1425,9 @@ dat = b_cells@meta.data %>%
 p0 = ggplot(
   dat,
   aes(phenotype,
-  prop,
-  fill=source)
-  )+
+      prop,
+      fill=source)
+)+
   facet_wrap(~cell_type)+
   geom_boxplot(alpha=0.8)+
   geom_point(alpha=0.7,position=position_dodge(width=0.75))+
@@ -1265,44 +1441,13 @@ dev.off()
 # plot per individual
 rownames(b_cells@meta.data) = colnames(b_cells)
 p=DimPlot(subset(b_cells,source=="CSF" & phenotype=="MS"),group.by="expanded_clone",split.by="iid",ncol=9)+
-theme_minimal()+
-NoLegend()+
-theme(axis.text.x = element_blank(),axis.text.y=element_blank(),
-panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  theme_umap()
 png("./indiv_clonal_dim_plots_ms.png",res=300,units="in",height=8,width=8)
 p
 dev.off()
 
-# models
-model_csf = glm(data = dat %>% filter(source=="CSF"),
-prop ~ Age + Gender) %>% summary
-model_pbmc = glm(data = dat %>% filter(phenotype=="MS" & source=="PBMC"),
-prop ~ Age + Gender) %>% summary
-
-p0=ggplot(dat %>% filter(phenotype=="MS"),aes(Age,prop,col=source))+
-geom_point(alpha=0.8)+
-theme_minimal()+
-facet_wrap(~source)+
-geom_smooth(method="lm",alpha=0.1,width=0.1,se=F)+
-scale_color_brewer(palette="Set1")+
-labs(x="Age",y="Proportion of \nexpanded B cells",color="Source")
-
-p1=ggplot(dat %>% filter(phenotype=="MS") %>%
-mutate(Gender = ifelse(Gender == 1,"Male","Female")),
-aes(Gender,prop,fill=source))+
-geom_boxplot(alpha=0.8)+
-theme_minimal()+
-scale_color_brewer(palette="Set1")+
-labs(x="Gender",y="Proportion of \nexpanded B cells",fill="Source")
-
-png("clonal_proportions_individual_level_vs_age.png",res=300,height=4,width=8,units="in")
-grid.arrange(p0,p1)
-dev.off()
 
 
-
-variable = "oligo_pos"
-plot_title = "DRB status"
 pheno_corr = function(variable,plot_title){
   plot_dat = dat %>% filter(phenotype=="MS" & !is.na(.data[[variable]]))
 
@@ -1332,22 +1477,21 @@ pheno_corr = function(variable,plot_title){
   p1=ggplot(
     plot_dat,
     aes(cell_type,
-    prop,
-    fill=.data[[variable]]))+
-  geom_boxplot(alpha=0.8)+
-  theme_minimal()+
-  facet_wrap(~source)+
-  scale_fill_brewer(palette="Set3")+
-  labs(x="Cell type",y="Proportion of \nexpanded B cells",fill=plot_title)+
-  geom_text(mapping = aes(cell_type,y=1.05,label = P))
+        prop,
+        fill=.data[[variable]]))+
+    geom_boxplot(alpha=0.8)+
+    theme_minimal()+
+    facet_wrap(~source)+
+    scale_fill_brewer(palette="Set3")+
+    labs(x="Cell type",y="Proportion of \nexpanded B cells",fill=plot_title)+
+    geom_text(mapping = aes(cell_type,y=1.05,label = P))
 
   png(paste0("clonal_proportions_vs_",plot_title,".png"),res=300,height=4,width=8,units="in")
   print(p1)
   dev.off()
 }
 
-pheno_corr("drb_pos","DRB status")
-pheno_corr("oligo_pos","OCB status")
+pheno_corr("OCB","OCB status")
 pheno_corr("Category_fine","MS subtype")
 
 #######################################
@@ -1358,16 +1502,10 @@ rownames(b_cells@meta.data) = colnames(b_cells)
 # compare expanded vs non-expanded in MS
 common_cell_types = c("Naive B cells","Memory B cells","Plasma cells")
 expanded_v_not_plot = function(x){
-DimPlot(subset(b_cells,phenotype=="MS" & cell_type %in% common_cell_types),
-split.by="expanded_clone",group.by=x)+
-scale_color_brewer(palette="Set1")+
-theme_minimal()+
-theme(axis.text.y=element_blank(),
-axis.text.x=element_blank(),
-panel.grid.major = element_blank(),
-panel.grid.minor = element_blank(),
-axis.title.x = element_blank(),
-axis.title.y = element_blank())
+  DimPlot(subset(b_cells,phenotype=="MS" & cell_type %in% common_cell_types),
+          split.by="expanded_clone",group.by=x)+
+    scale_color_brewer(palette="Set1")+
+    theme_umap()
 }
 
 p0=expanded_v_not_plot("cell_type")+ggtitle("Cell type")
@@ -1379,16 +1517,10 @@ grid.arrange(p0,p1,p2,p3)
 dev.off()
 
 expanded_v_not_plot_csf = function(x){
-DimPlot(subset(b_cells,phenotype=="MS" & cell_type %in% common_cell_types & source=="CSF"),
-split.by="expanded_clone",group.by=x)+
-scale_color_brewer(palette="Set1")+
-theme_minimal()+
-theme(axis.text.y=element_blank(),
-axis.text.x=element_blank(),
-panel.grid.major = element_blank(),
-panel.grid.minor = element_blank(),
-axis.title.x = element_blank(),
-axis.title.y = element_blank())
+  DimPlot(subset(b_cells,phenotype=="MS" & cell_type %in% common_cell_types & source=="CSF"),
+          split.by="expanded_clone",group.by=x)+
+    scale_color_brewer(palette="Set1")+
+    theme_umap()
 }
 
 p0=expanded_v_not_plot_csf("cell_type")+ggtitle("Cell type")
@@ -1426,11 +1558,11 @@ for(i in c(1:length(unique(expanded$donor_clone)))){
 }
 
 clone_df = data.frame(
-donor_clone = unique(expanded$donor_clone),
-same_cell = unlist(same_cell_lgl),
-same_isotype = unlist(same_isotype_lgl),
-same_source = unlist(same_source_lgl),
-same_shm = unlist(same_shm_lgl))
+  donor_clone = unique(expanded$donor_clone),
+  same_cell = unlist(same_cell_lgl),
+  same_isotype = unlist(same_isotype_lgl),
+  same_source = unlist(same_source_lgl),
+  same_shm = unlist(same_shm_lgl))
 table(clone_df$same_cell)[1]/nrow(clone_df)*100
 table(clone_df$same_isotype)[1]/nrow(clone_df)*100
 table(clone_df$same_source)[1]/nrow(clone_df)*100
@@ -1439,35 +1571,38 @@ discordant_clones = clone_df %>% filter(same_cell==FALSE)
 p0=ggplot(expanded %>% filter(donor_clone %in% discordant_clones$donor_clone),aes(donor_clone,fill=cell_type))+geom_bar(position="fill")+coord_flip()+theme_minimal()+scale_fill_brewer(palette="Paired")+labs(y="Proportion of clone",x="Clone ID",fill="Cell type")
 discordant_clones2 = clone_df %>% filter(same_isotype==FALSE)
 p1=ggplot(expanded %>% filter(donor_clone %in% discordant_clones2$donor_clone),
-aes(donor_clone,fill=isotype))+geom_bar(position="fill")+coord_flip()+theme_minimal()+scale_fill_brewer(palette="Paired")+labs(y="Proportion of clone",x="Clone ID",fill="Isotype")
+          aes(donor_clone,fill=isotype))+geom_bar(position="fill")+coord_flip()+theme_minimal()+scale_fill_brewer(palette="Paired")+labs(y="Proportion of clone",x="Clone ID",fill="Isotype")
 discordant_clones3 = clone_df %>% filter(same_source==FALSE)
 p2=ggplot(expanded %>% filter(donor_clone %in% discordant_clones3$donor_clone),
-aes(donor_clone,fill=source))+geom_bar(position="fill")+coord_flip()+theme_minimal()+scale_fill_brewer(palette="Paired")+labs(y="Proportion of clone",x="Clone ID",fill="Compartment")
+          aes(donor_clone,fill=source))+geom_bar(position="fill")+coord_flip()+theme_minimal()+scale_fill_brewer(palette="Paired")+labs(y="Proportion of clone",x="Clone ID",fill="Compartment")
 
 png("clonal_phenotypes.png",res=300,height=8,width=8,units="in")
 lay = rbind(
-c(1,1,1,1,1,1,1,1,1,1),
-c(1,1,1,1,1,1,1,1,1,1),
-c(2,2,2,2,2,2,2,2,2,NA),
-c(3,3,3,3,3,3,3,3,3,NA)
+  c(1,1,1,1,1,1,1,1,1,1),
+  c(1,1,1,1,1,1,1,1,1,1),
+  c(2,2,2,2,2,2,2,2,2,NA),
+  c(3,3,3,3,3,3,3,3,3,NA)
 )
 grid.arrange(p0,p1,p2,layout_matrix = lay)
 dev.off()
 
+expanded %>%
+  dplyr::count(donor_clone,phenotype,source,cell_type,isotype,shm_positive) %>%
+  arrange(desc(n))
 # exemplar clone
 clone_plot = function(clone_to_plot){
   plot_clone_data = expanded %>%
-  dplyr::count(donor_clone,phenotype,source,cell_type,isotype,shm_positive) %>%
-  filter(donor_clone == clone_to_plot)
+    dplyr::count(donor_clone,phenotype,source,cell_type,isotype,shm_positive) %>%
+    filter(donor_clone == clone_to_plot)
 
   png(paste0(clone_to_plot,"clonal_heterogeneity_cell_types.png"),res=300,units="in",width=4,height=3)
   p=ggplot(plot_clone_data,aes(source,cell_type,color=isotype,size=n,alpha=0.8))+
-  geom_point(position=position_dodge(width=1))+
-  theme_minimal()+
-  guides(alpha=FALSE)+
-  geom_vline(xintercept=1.5,alpha=0.1)+
-  theme(axis.title.y=element_blank(),axis.title.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
-  ggtitle(plot_clone_data$donor_clone[1])
+    geom_point(position=position_dodge(width=1))+
+    theme_minimal()+
+    guides(alpha=FALSE)+
+    geom_vline(xintercept=1.5,alpha=0.1)+
+    theme(axis.title.y=element_blank(),axis.title.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+    ggtitle(plot_clone_data$donor_clone[1])
   print(p)
   dev.off()
   clone_dat = b_cells@meta.data %>% filter(donor_clone==clone_to_plot)
@@ -1475,11 +1610,9 @@ clone_plot = function(clone_to_plot){
 }
 
 # look at "9X14GT24_96_9_17_3325"
-clone_plot("9X14GT24_96_9_17_3325")
+clone_plot(clone_to_plot = "9X14GT24_257_9_20_880")
 
-clone_plot("TU740_22_8_17_3141")
-clone_plot("FW1LNFL5_96_10_22_2890")
-clone_plot("JEGK54J2_188_7_11_752")
+clone_plot("PatID_65_219_9_2_117")
 
 
 expanded %>% filter(shm_positive=="No") %>% dplyr::count(donor_clone)
@@ -1525,16 +1658,16 @@ b_cells@meta.data %>%
 
 # look at in more detail
 expanded_shmneg = subset(b_cells,
-  cell_id %in% expanded_unmutated$cell_id)
+                         cell_id %in% expanded_unmutated$cell_id)
 
 # compare cdr3 in csf vs pbmc
 res = list()
 for(x in unique(expanded$donor_clone)){
-res[[length(res)+1]] = expanded %>%
-  filter(donor_clone == x) %>%
-  group_by(source) %>%
-  summarise(cdr3mu = mean(cdr3_mu_freq_overall)) %>%
-  mutate(donor_clone = x)
+  res[[length(res)+1]] = expanded %>%
+    filter(donor_clone == x) %>%
+    group_by(source) %>%
+    summarise(cdr3mu = mean(cdr3_mu_freq_overall)) %>%
+    mutate(donor_clone = x)
 }
 res = do.call("bind_rows",res)
 donors_to_keep = res %>% dplyr::count(donor_clone) %>% filter(n==2)
@@ -1543,23 +1676,84 @@ res %>% filter(donor_clone %in% donors_to_keep$donor_clone)
 #################################
 # check for public clones
 ################################
+
+library(circlize)
+
+
+set.seed(123)
+
+# get donors
+plot.new()
+
+circ_plot_df = b_cells@meta.data %>% distinct(iid,phenotype) %>%
+  arrange(phenotype)
+
+data = data.frame(
+  factor = circ_plot_df$iid,
+  phenotype = circ_plot_df$phenotype,
+  x = seq(1,nrow(circ_plot_df)),
+  y = runif(nrow(circ_plot_df))
+)
+xlims = data %>% dplyr::select(factor) %>%
+  mutate(xmin = row_number(),xmax = row_number()+1)
+rownames(xlims) = xlims$factor
+xlims = xlims %>% dplyr::select(-factor)
+
+# Initialize the plot.
+png("circos_bcrs.png")
+par(mar = c(1, 1, 1, 1) )
+circos.par(cell.padding = c(0.02, 0, 0.02, 0))
+circos.initialize(factors =  data$factor,xlim = xlims)
+
+# Build the regions of track #1
+circos.trackPlotRegion(factors = data$factor, y=data$y , bg.col = rgb(0.1,0.1,seq(0,1,0.1),0.4) , bg.border = NA)
+
+# Add a link between a zone and another
+circos.link("PatID_72", c(-0.5, 0.5), "PatID_109", c(-0.5,0.5), col = "red", border = "blue", h = 0.2)
+
+dev.off()
+
+b_cells@meta.data$clone_id
+
 public_clones = b_cells@meta.data %>%
   group_by(clone_id) %>%
-  dplyr::count(donor.id)  %>%
+  dplyr::count(iid)  %>%
   dplyr::count(clone_id) %>%
-  arrange(desc(n)) %>% filter(n>1)
+  filter(n>1)
+overall_dat = data.frame()
+for(i in c(1:nrow(public_clones))){
+  dat = b_cells@meta.data %>%
+    mutate(iid = paste0(iid,"_",phenotype)) %>%
+    filter(clone_id %in% public_clones$clone_id[i]) %>%
+    dplyr::count(iid,clone_id) %>%
+    tidyr::pivot_wider(id_cols = clone_id,
+                       values_from=iid,
+                       names_from=iid)
+  colnames(dat)[c(2,3)] = c("from","to")
+  overall_dat <<- bind_rows(overall_dat,dat)
+}
+overall_dat$value = 1
+overall_dat$clone_id = NULL
 
-b_cells@meta.data %>% filter(clone_id %in% public_clones$clone_id)
+grid.cols = b_cells@meta.data %>%
+  distinct(iid,phenotype) %>%
+  mutate(col = case_when(
+    phenotype == "MS" ~ "purple",
+    phenotype=="NIND" ~ "blue",
+    phenotype=="OIND"~ "red"
+  ))
+grid_col_vec = grid.cols$col
+names(grid_col_vec) = paste0(grid.cols$iid,"_",grid.cols$phenotype)
 
-bcr_db = read_csv("bcr_db.csv")
-b_cells@meta.data %>% filter(junction_aa_VDJ %in% bcr_db$CDR3.heavy.aa)
-bcr_db %>% filter(CDR3.heavy.aa %in% b_cells@meta.data$junction_aa_VDJ)
+
+
+png("chord_diag.png",res=600,units="in",width=4,height=4)
+chordDiagram(overall_dat,grid.col = grid_col_vec)
+dev.off()
 
 # lanz
-lanz_cdr3 = read_csv("../Lanz_AllCsfCdr3ForBenJacobs.csv")
+lanz_cdr3 = read_csv("~/rds/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/Lanz_AllCsfCdr3ForBenJacobs.csv")
 b_cells@meta.data %>% filter(junction_aa_VDJ %in% lanz_cdr3$`JUNCTION | HC`)
-b_cells@meta.data %>% filter(junction_aa_VJ %in% lanz_cdr3$`JUNCTION | LC`)
-
 
 # hamming distance from expanded clones to lanz
 expanded_cdr3 = b_cells@meta.data %>% distinct(donor_clone,.keep_all=T)
@@ -1582,19 +1776,19 @@ for(i in c(1:length(expanded_cdr3))){
     if(length(matching_length_cdr3_lanz)==0){
       next
     } else {
-    # iterate along each letter to see if different
-    hamming = c()
+      # iterate along each letter to see if different
+      hamming = c()
       for(k in c(1:length_cdr3)){
         res = substr(cdr3_to_match,k,k) == substr(this_cdr3,k,k)
         hamming <<- c(hamming,res)
       }
-    lnh = sum(hamming) / length_cdr3
-    if(lnh>0.7){
-      message("LNH = ", round(lnh,2))
-      overlaps[[length(overlaps)+1]] = data.frame(this_cdr3,cdr3_to_match,lnh)
+      lnh = sum(hamming) / length_cdr3
+      if(lnh>0.7){
+        message("LNH = ", round(lnh,2))
+        overlaps[[length(overlaps)+1]] = data.frame(this_cdr3,cdr3_to_match,lnh)
+      }
     }
   }
-}
 }
 
 overlaps = do.call("bind_rows",overlaps)
@@ -1641,28 +1835,28 @@ do_de = function(dat,plot_title){
   # aggregate counts
   groups = colData(cells_for_de.sce)[, c("iid","expanded_clone")]
   aggregated_counts  = aggregate.Matrix(t(counts(cells_for_de.sce)),
-  groupings = groups, fun = "sum") %>% t()
+                                        groupings = groups, fun = "sum") %>% t()
 
   # remove groups with low cell counts for DE (<n cells)
   aggregated_counts = aggregated_counts[!rownames(aggregated_counts) %in% low_counts$donor_to_exclude,]
 
   group_vector = lapply(colnames(aggregated_counts),function(y){
-        if(grepl("Not expanded",y)){
-          "Not_expanded"
-        } else if(grepl("Expanded",y)){
-          "Expanded"
-        }
-      }) %>% unlist %>% factor()
+    if(grepl("Not expanded",y)){
+      "Not_expanded"
+    } else if(grepl("Expanded",y)){
+      "Expanded"
+    }
+  }) %>% unlist %>% factor()
 
   # make the DGE object
   y=DGEList(aggregated_counts,group=group_vector,remove.zeros=TRUE)
 
   # update sample info
   y$samples =  y$samples %>%
-  mutate(donor_expanded = rownames(y$samples)) %>%
-  left_join(b_cells@meta.data %>%
-  dplyr::select(Age,Sex,donor_expanded) %>%
-  distinct(donor_expanded,.keep_all=TRUE),by="donor_expanded")
+    mutate(donor_expanded = rownames(y$samples)) %>%
+    left_join(b_cells@meta.data %>%
+                dplyr::select(Age,Sex,donor_expanded) %>%
+                distinct(donor_expanded,.keep_all=TRUE),by="donor_expanded")
 
   design = model.matrix(~0+group_vector+Age+Sex,y$samples)
   colnames(design) = c(levels(group_vector),"Age","Sex")
@@ -1698,13 +1892,13 @@ do_de = function(dat,plot_title){
   # de plot
   colours = c("Up" = "red", "Down" = "blue", "nonsig" = "grey")
   plot = ggplot(res,aes(logFC,-log10(PValue),color=direction,label=gene))+
-  theme_bw()+
-  geom_point()+
-  NoLegend()+
-  geom_label_repel(data=res %>% arrange(PValue) %>% head(n=10),mapping=aes(),max.overlaps=500)+
-  scale_color_manual(values = colours)+
-  scale_x_continuous(limits=c(-7,7))+
-  scale_y_continuous(limits=c(0,10))
+    theme_bw()+
+    geom_point()+
+    NoLegend()+
+    geom_label_repel(data=res %>% arrange(PValue) %>% head(n=10),mapping=aes(),max.overlaps=500)+
+    scale_color_manual(values = colours)+
+    scale_x_continuous(limits=c(-10,10))+
+    scale_y_continuous(limits=c(0,20))
 
   png(paste0(plot_title,"_expanded_vs_not.png"),res=300,units="in",height=4,width=4)
   print(plot)
@@ -1734,7 +1928,7 @@ do_de = function(dat,plot_title){
 
   colours = c("Up" = "red", "Down" = "blue")
   # NB labeled with nominal significance
-  plot = ggplot(topres,aes(NES,pathway,label=ifelse(fdr<0.05,"*"," "),fill=direction))+
+  plot = ggplot(topres,aes(NES,pathway,label=ifelse(fdr<0.01,"*"," "),fill=direction))+
     theme_bw()+
     labs(x="Normalised enrichment score",fill="Pathway enrichment")+
     geom_col(color="black")+
@@ -1751,87 +1945,81 @@ do_de = function(dat,plot_title){
 do_de(
   dat = subset(b_cells,phenotype=="MS" & source == "CSF" & cell_type == "Plasma cells"),
   plot_title = "MS_CSF_PCs"
-  )
+)
 
-  do_de(
-    dat = subset(b_cells,phenotype=="MS" & source == "PBMC" & cell_type == "Plasma cells"),
-    plot_title = "MS_PBMC_PCs"
-    )
+do_de(
+  dat = subset(b_cells,phenotype=="MS" & source == "PBMC" & cell_type == "Plasma cells"),
+  plot_title = "MS_PBMC_PCs"
+)
 
 do_de(
   dat = subset(b_cells,phenotype=="MS" & source=="CSF" & cell_type == "Memory B cells"),
   plot_title = "MS_CSF_MemB"
-  )
+)
 
-  do_de(
-    dat = subset(b_cells,phenotype=="OIND" & source=="CSF" & cell_type == "Memory B cells"),
-    plot_title = "OIND_CSF_MemB"
-    )
+do_de(
+  dat = subset(b_cells,phenotype=="OIND" & source=="CSF" & cell_type == "Memory B cells"),
+  plot_title = "OIND_CSF_MemB"
+)
 
-    do_de(
-      dat = subset(b_cells,phenotype=="OIND" & source=="CSF" & cell_type == "Plasma cells"),
-      plot_title = "OIND_CSF_PCs"
-      )
+do_de(
+  dat = subset(b_cells,phenotype=="OIND" & source=="CSF" & cell_type == "Plasma cells"),
+  plot_title = "OIND_CSF_PCs"
+)
 
+
+# sense check
+png("clonal_memb_umap.png",res=300,units="in",width=4,height=4)
+DimPlot(subset(b_cells,phenotype=="MS" & source=="CSF" & cell_type=="Memory B cells"),group.by="expanded_clone")+
+  theme_umap()
+dev.off()
+
+png("clonal_memb_umap_crude_clusters.png",res=300,units="in",width=4,height=4)
+DimPlot(subset(b_cells,phenotype=="MS" & source=="CSF" & cell_type=="Memory B cells"),group.by="cell_type_crude",split.by="expanded_clone")+
+  theme_umap()
+dev.off()
 
 
 # heatmap
 
-selected_features =c(
-"IGHG1",
-"IGKV3-11",
-"HCST",
-"SUB1",
-"TMSB4X",
-"ARPC1B",
-"B2M",
-"HIST1H1E",
-"LBH",
-"AL138963.4",
-"LSP1",
-"IGKC",
-"VOPP1",
-"PPIB",
-"NEAT1",
-"CAPZB",
-"IFI30",
-"IGKV3-20",
-"EVI2B",
-"ARHGDIB",
-"HLA-DPA1",
-"CCDC50")
+top_features = read_csv("MS_CSF_MemB_de_expanded_vs_not.csv") %>%
+  filter(logFC >1) %>%
+  filter(P_adj<0.005) %>%
+  filter(!grepl("^IG",gene))
 
-
-png("selected_featureplot_clonal_markers.png",res=300,units="in",width=16,height=24)
-FeaturePlot(b_cells,features=selected_features,split.by="expanded_clone")
-dev.off()
+selected_features =top_features$gene
+DefaultAssay(b_cells)="SCT"
 
 dat = subset(b_cells,phenotype=="MS" & source=="CSF" & cell_type == "Memory B cells")
 
-png("featureplot_clonal_markers.png",res=300,units="in",width=10,height=10)
+png("selected_featureplot_clonal_markers.png",res=300,units="in",width=8,height=8)
 FeaturePlot(b_cells,features=selected_features,split.by="expanded_clone")
 dev.off()
+png("selected_featureplot_clonal_markers_just_expanded_memb.png",res=300,units="in",width=8,height=8)
+FeaturePlot(dat,features=selected_features,split.by="expanded_clone")
+dev.off()
 
-b_cells@meta.data[['original_cell_label']] = b_cells@meta.data$cell_type
+
+
+b_cells@meta.data[['original_cell_label']] = b_cells@meta.data$cell_type_crude
 b_cells@meta.data[['cell_type']] = b_cells@meta.data$ann_celltypist_highres
 
-# remove 3 cells
+# remove mislabelled cells
 do_de(
-  dat = subset(b_cells,phenotype=="MS" & source=="CSF" & cell_type == "Memory B cells" & original_cell_label != "Plasma_cells"),
+  dat = subset(b_cells,phenotype=="MS" & source=="CSF" & cell_type == "Memory B cells" & original_cell_label != "Plasma cells"),
   plot_title = "MS_CSF_MemB_sensitivity_check"
-  )
-
+)
 
 
 # gene score
-clonal_sig = features
+clonal_sig = top_features$gene
 add_score = function(genelist,name = "gene_score"){
-features = list(genelist)
-# module score
-DefaultAssay(b_cells) = "RNA"
-b_cells = AddModuleScore(b_cells,features = features,nbin=10,ctrl=1000,name=name)
-b_cells[[paste0(name,"_z")]] = RNOmni::RankNorm(b_cells@meta.data[[paste0(eval(name),"1")]])
-b_cells
+  features = list(genelist)
+  # module score
+  DefaultAssay(b_cells) = "RNA"
+  b_cells = AddModuleScore(b_cells,features = features,nbin=10,ctrl=1000,name=name)
+  b_cells[[paste0(name,"_z")]] = RNOmni::RankNorm(b_cells@meta.data[[paste0(eval(name),"1")]])
+  b_cells
 }
 
 b_cells = add_score(clonal_sig)
@@ -1839,47 +2027,47 @@ b_cells = add_score(clonal_sig)
 
 png("clonal_sig_genes_all_cells.png",res=300,units="in",width=4,height=4)
 FeaturePlot(b_cells,features = "gene_score_z")+
-scale_colour_gradient(low="darkblue",high="orange",limits=c(-4,4))+
-theme_minimal()+
-theme(axis.title.x=element_blank(),
+  scale_colour_gradient(low="darkblue",high="orange",limits=c(-4,4))+
+  theme_minimal()+
+  theme(axis.title.x=element_blank(),
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank(),
         axis.title.y=element_blank(),
-                axis.text.y=element_blank(),
-                axis.ticks.y=element_blank(),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank())+
-                ggtitle(" ")
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())+
+  ggtitle(" ")
 dev.off()
 
 png("clonal_sig_genes_ms_csf.png",res=300,units="in",width=4,height=4)
 FeaturePlot(subset(b_cells,phenotype=="MS" & source=="CSF"),features = "gene_score_z")+
-scale_colour_gradient(low="darkblue",high="orange",limits=c(-4,4))+
-theme_minimal()+
-theme(axis.title.x=element_blank(),
+  scale_colour_gradient(low="darkblue",high="orange",limits=c(-4,4))+
+  theme_minimal()+
+  theme(axis.title.x=element_blank(),
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank(),
         axis.title.y=element_blank(),
-                axis.text.y=element_blank(),
-                axis.ticks.y=element_blank(),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank())+
-                ggtitle("CSF")
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())+
+  ggtitle("CSF")
 dev.off()
 
 png("clonal_sig_genes_ms_pbmc.png",res=300,units="in",width=4,height=4)
 FeaturePlot(subset(b_cells,phenotype=="MS" & source=="PBMC"),features = "gene_score_z")+
-scale_colour_gradient(low="darkblue",high="orange",limits=c(-4,4))+
-theme_minimal()+
-theme(axis.title.x=element_blank(),
+  scale_colour_gradient(low="darkblue",high="orange",limits=c(-4,4))+
+  theme_minimal()+
+  theme(axis.title.x=element_blank(),
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank(),
         axis.title.y=element_blank(),
-                axis.text.y=element_blank(),
-                axis.ticks.y=element_blank(),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank())+
-                ggtitle("PBMC")
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())+
+  ggtitle("PBMC")
 dev.off()
 
 cell_types = c("Naive B cells","Memory B cells","Plasma cells")
@@ -1887,16 +2075,16 @@ cell_types = c("Naive B cells","Memory B cells","Plasma cells")
 outputs = list()
 for(cell in cell_types){
   for(this_source in c("CSF","PBMC")){
-    a = b_cells@meta.data %>% filter(phenotype=="MS") %>% filter(source == this_source  & cell_type==cell)
-    b = b_cells@meta.data %>% filter(phenotype=="OIND") %>% filter(source == this_source & cell_type==cell)
+    a = b_cells@meta.data %>% filter(expanded_clone=="Not expanded")  %>% filter(phenotype=="MS") %>% filter(source == this_source  & cell_type==cell)
+    b = b_cells@meta.data %>% filter(expanded_clone=="Not expanded")  %>% filter(phenotype=="OIND") %>% filter(source == this_source & cell_type==cell)
     p = ifelse(nrow(a)==0 | nrow(b)==0,NA,t.test(a$gene_score_z,b$gene_score_z)$p.value)
     df = data.frame(this_source,cell,p,comparison = "MS_OIND",mean_a = mean(a$gene_score_z),mean_b = mean(b$gene_score_z))
-    a = b_cells@meta.data %>% filter(phenotype=="MS") %>% filter(source == this_source  & cell_type==cell)
-    b = b_cells@meta.data %>% filter(phenotype=="NIND") %>% filter(source == this_source & cell_type==cell)
+    a = b_cells@meta.data %>% filter(expanded_clone=="Not expanded")  %>% filter(phenotype=="MS") %>% filter(source == this_source  & cell_type==cell)
+    b = b_cells@meta.data %>% filter(expanded_clone=="Not expanded")  %>% filter(phenotype=="NIND") %>% filter(source == this_source & cell_type==cell)
     p = ifelse(nrow(a)==0 | nrow(b)==0,NA,t.test(a$gene_score_z,b$gene_score_z)$p.value)
     df2 = data.frame(this_source,cell,p,comparison = "MS_NIND",mean_a = mean(a$gene_score_z),mean_b = mean(b$gene_score_z))
-    a = b_cells@meta.data %>% filter(phenotype=="OIND") %>% filter(source == this_source  & cell_type==cell)
-    b = b_cells@meta.data %>% filter(phenotype=="NIND") %>% filter(source == this_source & cell_type==cell)
+    a = b_cells@meta.data %>% filter(expanded_clone=="Not expanded")  %>% filter(phenotype=="OIND") %>% filter(source == this_source  & cell_type==cell)
+    b = b_cells@meta.data %>% filter(expanded_clone=="Not expanded")  %>% filter(phenotype=="NIND") %>% filter(source == this_source & cell_type==cell)
     p = ifelse(nrow(a)==0 | nrow(b)==0,NA,t.test(a$gene_score_z,b$gene_score_z)$p.value)
     df3 = data.frame(this_source,cell,p,comparison = "OIND_NIND",mean_a = mean(a$gene_score_z),mean_b = mean(b$gene_score_z))
 
@@ -1904,10 +2092,13 @@ for(cell in cell_types){
   }
 }
 outputs = do.call("bind_rows",outputs)
-outputs %>% mutate(fdr = p.adjust(p,method="fdr")) %>% mutate(sig = ifelse(fdr<0.1,"yes","no")) %>% mutate(up_in_ms = ifelse(mean_a>mean_b,"up in MS"," ")) %>% dplyr::select(-mean_a,-mean_b,-p)
+outputs %>% mutate(fdr = p.adjust(p,method="fdr")) %>% mutate(sig = ifelse(fdr<0.1,"yes","no")) %>% mutate(up_in_ms = ifelse(mean_a>mean_b,"up in MS"," ")) %>% dplyr::select(-mean_a,-mean_b,-p) %>%
+  filter(comparison=="MS_OIND")
 
-p = ggplot(b_cells@meta.data %>% filter(cell_type %in% cell_types & phenotype %in% c("OIND","MS")),
-  aes(cell_type,gene_score_z,fill=phenotype))+
+p = ggplot(b_cells@meta.data %>%
+             filter(expanded_clone=="Not expanded") %>%
+             filter(cell_type %in% cell_types & phenotype %in% c("OIND","MS")),
+           aes(cell_type,gene_score_z,fill=phenotype))+
   facet_wrap(~source)+
   geom_boxplot()+
   theme_minimal()+
@@ -1917,293 +2108,30 @@ png("clonal_gene_score.png",res=300,units="in",width=8,height=4)
 p
 dev.off()
 
-
-FeatureScatter(b_cells,feature1 = "gene_score_z", feature2 = "MKI68",group.by="cell_type")
-
-
-
-png("bcells_annotations_PBMC.png",res=300,units="in",width=4,height=4)
-FeaturePlot(subset(pcs, source == "PBMC"),features="gene_score_z")+ggtitle("PBMC")+scale_colour_gradient(low="darkblue",high="orange",limits=c(-4,4))
+png("clonal_gene_score_vs_size.png",res=300,units="in",width=8,height=4)
+FeatureScatter(b_cells,feature1 = "gene_score_z", feature2 = "clonal_size",group.by="cell_type")
 dev.off()
-
-
-  do_de(
-    dat = subset(b_cells,phenotype=="MS" & source=="PBMC" & cell_type == "Memory B cells"),
-    plot_title = "MS_PBMC_MemB"
-    )
-
-
 
 
 ################################
-# de clonal vs not in single donors
+# individual genes
 ################################
 
-
-overall_results_df = data.frame()
-# n=1 clonal vs not
-DefaultAssay(b_cells) = "RNA"
-# get names for clusters
-clusters = "Plasma cells"
-
-
-donor_list = unique(b_cells@meta.data$donor.id)
-
-do_de_per_donor = function(donor, cell_type = "Plasma cells", source = "CSF"){
-  message("Donor: ",donor)
-  message("Source: ",source)
-  message("Cell type:", cell_type)
-  cells = b_cells@meta.data %>% filter(phenotype=="MS" & source == source & donor.id ==donor & cell_type == cell_type)
-  no_expanded = cells %>% filter(expanded_clone=="Expanded")
-  non_expanded = cells %>% filter(expanded_clone=="Not expanded")
-  n_clones = no_expanded %>% distinct(clone_id) %>% nrow
-  if(nrow(cells)==0 | nrow(no_expanded)<10 | nrow(non_expanded)==0){
-    return(NA)
-  }
-  cells_for_de = subset(b_cells, subset = phenotype=="MS" & source == source & donor.id ==donor & cell_type == cell_type)
-
-  # distinct expanded clones
-  expanded_clones = cells_for_de@meta.data %>% filter(expanded_clone=="Expanded") %>% distinct(donor_clone)
-
-  for(clone in expanded_clones$donor_clone){
-
-    # filter out other expanded cells
-    cells_to_keep = cells_for_de@meta.data %>% filter(!(expanded_clone == "Expanded" & donor_clone!=clone))
-    cells_for_de_filtered = subset(cells_for_de, subset = full_cell_id %in% cells_to_keep$full_cell_id)
-    no_expanded = cells_to_keep %>% filter(expanded_clone=="Expanded") %>% nrow
-
-    if(no_expanded<10){
-      next
-    } else {
-    # convert to sce object
-    cells_for_de.sce = as.SingleCellExperiment(cells_for_de_filtered)
-
-    # aggregate counts
-    groups = colData(cells_for_de.sce)[, c("donor.id","expanded_clone")]
-    aggregated_counts  = aggregate.Matrix(t(counts(cells_for_de.sce)),
-    groupings = groups, fun = "sum") %>% t()
-
-    group_vector = lapply(colnames(aggregated_counts),function(y){
-          if(grepl("Not expanded",y)){
-            "Not_expanded"
-          } else if(grepl("Expanded",y)){
-            "Expanded"
-          }
-        }) %>% unlist %>% factor(levels=c("Not_expanded","Expanded"))
-    # make the DGE object
-    y=DGEList(aggregated_counts,group=group_vector,remove.zeros=TRUE)
-    design = model.matrix(~0+group_vector)
-    colnames(design) = levels(group_vector)
-
-    keep = filterByExpr(
-      y,
-      design = design,
-      group = group_vector,
-      min.count = 10,
-      min.total.count = 15,
-      large.n = 10,
-      min.prop = 0.7)
-    y = y[keep, , keep.lib.sizes=FALSE]
-    y = calcNormFactors(y)
-    res = exactTest(y,dispersion=0.4^2)
-    print(summary(decideTests(res)))
-
-    res = res$table %>% mutate(P_adj = p.adjust(PValue,method="fdr")) %>% arrange(PValue)
-    res$gene = rownames(res)
-    res$significant = ifelse(res$P_adj<0.05,"yes","no")
-    res = res %>% mutate(direction = ifelse(logFC>0,"Up","Down")) %>% mutate(direction = ifelse(P_adj<0.05,direction,"neither"))
-
-    total_genes = nrow(res)
-    non_sig = sum(res$significant=="no")
-    sig_up = sum(res$significant=="yes" & res$direction=="Up")
-    sig_down = sum(res$significant=="yes" & res$direction=="Down")
-
-    res$donor = donor
-    res$source = source
-    res$cell_type = cell_type
-    res$donor_clone = clone
-    overall_results_df <<- bind_rows(overall_results_df,res)
-
-    # de plot
-    colours = c("Up" = "red","Down" = "blue", "neither" = "grey")
-    plot = ggplot(res,aes(logFC,-log10(PValue),color=direction,alpha=ifelse(significant=="yes",1,0.1),label=gene))+
-    theme_bw()+
-    geom_point()+
-    NoLegend()+
-    geom_text_repel(data=res %>% arrange(PValue) %>% head(n=10),max_overlaps=50,mapping=aes())+
-    ggtitle(paste0("Clone ID: ",clone,"\nExpanded n: ",no_expanded,"\nDonor: ",donor))+scale_color_manual(values = colours)
-    return(plot)
-    }
-  }
-}
-
-
-plots = purrr::map(donor_list,do_de_per_donor)
-
-plots = plots[!is.na(plots)]
-null_vec = lapply(plots,function(x){
-  is.null(x)
-}) %>% unlist()
-plots = plots[!null_vec]
-
-png("pcs_clonal_vs_not_csf_single_donors.png",res=300,units="in",height=16,width=16)
-grid.arrange(grobs=plots)
+png("hcst.png",res=600,units="in",width=4,height=4)
+FeaturePlot(dat,features="HCST")+
+  scale_colour_gradient(low="darkblue",high="orange")+
+  theme_umap()
 dev.off()
 
-sig_results = overall_results_df %>% filter(P_adj < 0.05) %>% filter(!grepl("IG",gene))
-
-write_csv(overall_results_df,"overall_de_expanded_v_not_single_donors_ms_csf.csv")
-write_csv(sig_results,"sig_results_no_ig_overall_de_expanded_v_not_single_donors_ms_csf.csv")
-
-sig_results = overall_results_df %>% filter(!grepl("IG",gene))
-
-colours = c("Up" = "red","Down" = "blue", "neither" = "grey")
-plot = ggplot(sig_results,aes(logFC,-log10(PValue),color=direction,label=gene))+
-theme_bw()+
-facet_wrap(~donor_clone)+
-geom_point()+
-NoLegend()+
-geom_text_repel(data=sig_results %>% filter(P_adj<0.05),mapping=aes())+
-scale_color_manual(values = colours)
-
-png("pcs_clonal_vs_not_csf_single_donors_no_ig.png",res=300,units="in",height=16,width=16)
-plot
-dev.off()
-
-sig_results = overall_results_df %>% filter(P_adj < 0.05) %>% filter(!grepl("IG",gene))
-genes_to_keep =  sig_results %>% dplyr::count(gene) %>% filter(n>=3)
-plot_dat = overall_results_df %>% filter(gene %in% genes_to_keep$gene)
-png("indiv_de_heatmap.png",res=300,units="in",height=6,width=6)
-ggplot(plot_dat,aes(donor_clone,gene,fill=direction))+
-  geom_tile(color="black")+
-  theme_minimal()+
-  scale_fill_brewer()
+png("sub1.png",res=600,units="in",width=4,height=4)
+FeaturePlot(dat,features="SUB1")+
+  scale_colour_gradient(low="darkblue",high="orange")+
+  theme_umap()
 dev.off()
 
 
-##################################
-# repeat for memory
-plot = do_de_per_donor(cell_type="Memory B cells",donor="9X14GT24")
-
-png("big_clone.png",res=300,units="in",height=6,width=6)
-plot
+png("hist1h1e.png",res=600,units="in",width=4,height=4)
+FeaturePlot(dat,features="HIST1H1E")+
+  scale_colour_gradient(low="darkblue",high="orange")+
+  theme_umap()
 dev.off()
-
-################################
-# pathway scores
-################################
-protein_sec = res[res$pathway=="HALLMARK_PROTEIN_SECRETION",'leadingEdge']$leadingEdge %>% unlist()
-glyc = res[res$pathway=="HALLMARK_GLYCOLYSIS",'leadingEdge']$leadingEdge %>% unlist()
-oxphos = res[res$pathway=="HALLMARK_OXIDATIVE_PHOSPHORYLATION",'leadingEdge']$leadingEdge %>% unlist()
-xeno = res[res$pathway=="HALLMARK_XENOBIOTIC_METABOLISM",'leadingEdge']$leadingEdge %>% unlist()
-upr = res[res$pathway=="HALLMARK_UNFOLDED_PROTEIN_RESPONSE",'leadingEdge']$leadingEdge %>% unlist()
-mtorc1 = res[res$pathway=="HALLMARK_MTORC1_SIGNALING",'leadingEdge']$leadingEdge %>% unlist()
-clonal_sig = c(protein_sec,glyc,oxphos,xeno,upr,mtorc1)
-
-
-# just look at PCs
-pcs = subset(b_cells,subset = cell_type =="Plasma cells")
-# recluster
-set.seed(1)
-DefaultAssay(pcs)="SCT"
-pcs = RunUMAP(pcs,reduction="harmony",dims=1:50)
-pcs = FindNeighbors(pcs)
-pcs = FindClusters(pcs,resolution=0.2)
-
-add_score = function(genelist,name = "gene_score"){
-features = list(genelist)
-# module score
-DefaultAssay(pcs) = "RNA"
-pcs = AddModuleScore(pcs,features = features,nbin=10,ctrl=1000,name=name)
-pcs[[paste0(name,"_z")]] = RNOmni::RankNorm(pcs@meta.data[[paste0(eval(name),"1")]])
-pcs
-}
-
-pcs = add_score(clonal_sig)
-
-# stats
-a = pcs@meta.data %>% filter(phenotype=="MS") %>% filter(source == "CSF"  & cell_type=="Plasma cells" & expanded_clone=="Not expanded")
-b = pcs@meta.data %>% filter(phenotype=="MS") %>% filter(source == "PBMC" & cell_type=="Plasma cells" & expanded_clone=="Not expanded")
-t.test(a$gene_score_z,b$gene_score_z)$p.value
-
-a = pcs@meta.data %>% filter(phenotype=="MS") %>% filter(source == "CSF"  & cell_type=="Plasma cells" & expanded_clone=="Not expanded")
-b = pcs@meta.data %>% filter(phenotype=="MS") %>% filter(source == "CSF" & cell_type=="Plasma cells" & expanded_clone=="Expanded")
-t.test(a$gene_score_z,b$gene_score_z)$p.value
-
-png("bcells_annotations_CSF.png",res=300,units="in",width=4,height=4)
-FeaturePlot(subset(pcs, source == "CSF"),features="gene_score_z")+ggtitle("CSF")+scale_colour_gradient(low="darkblue",high="orange",limits=c(-4,4))
-dev.off()
-png("bcells_annotations_PBMC.png",res=300,units="in",width=4,height=4)
-FeaturePlot(subset(pcs, source == "PBMC"),features="gene_score_z")+ggtitle("PBMC")+scale_colour_gradient(low="darkblue",high="orange",limits=c(-4,4))
-dev.off()
-
-png("clonal_sig_gene_score_vln.png",res=300,units="in",width=4,height=4)
-VlnPlot(subset(pcs,cell_type=="Plasma cells"),features="gene_score_z",group.by="source",split.by="expanded_clone")+ggtitle("Clonal \ngene score")+scale_fill_brewer(palette="Set3")+
-stat_summary(fun="median",col="red",position=position_dodge(width=0.9))
-dev.off()
-
-png("mtorc1_sig_gene_score_vln.png",res=300,units="in",width=4,height=4)
-VlnPlot(subset(pcs, subset = expanded_clone=="Not expanded"),features="mtorc1_z",group.by="source")+ggtitle("MTORC1 \ngene score")+scale_fill_brewer(palette="Set3")+labs(x="Compartment",y="MTORC1 gene score")+
-stat_summary(fun="median",col="red",position=position_dodge(width=0.9))+
-annotate(geom="segment",x=1,xend=2,y=3.5,yend=3.5)+
-annotate(geom="text",x=1.5,y=3.8,label = "P < 0.0001")+
-scale_y_continuous(limits=c(-4,4))
-dev.off()
-
-
-png("mtorc1_sig_gene_score_vln_all_cells.png",res=300,units="in",width=4,height=4)
-VlnPlot(subset(pcs,phenotype=="MS"),features="mtorc1_z",split.by="source",group.by="cell_type")+
-ggtitle("MTORC1 \ngene score")+
-scale_fill_brewer(palette="Set3")+
-labs(x="Cell type",fill="Compartment",y="MTORC1 gene score")+
-stat_summary(fun="median",col="red",position=position_dodge(width=0.9))+
-scale_y_continuous(limits=c(-4,4))
-dev.off()
-
-
-
-FeatureScatter(pcs,feature1 = "mtorc1_z", feature2 = "clonal_size",group.by="cell_type")
-
-
-abc_markers = c("LITAF","TNFRSF1B","ITGAX","TBX21")
-
-add_score = function(genelist,name = "gene_score"){
-features = list(genelist)
-# module score
-DefaultAssay(b_cells) = "RNA"
-b_cells = AddModuleScore(b_cells,features = features,nbin=10,ctrl=1000,name=name)
-b_cells[[paste0(name,"_z")]] = RNOmni::RankNorm(b_cells@meta.data[[paste0(eval(name),"1")]])
-b_cells
-}
-
-b_cells = add_score(abc_markers)
-
-
-
-abc_features = c("HSPB1","RHOB","LITAF","EMP3","NEAT1","LGALS1","HES4","CIB1","RGS2","SRGN")
-abc_dat = subset(b_cells,original_cell_label != "Plasma_cells")
-# recluster
-set.seed(1)
-DefaultAssay(abc_dat)="SCT"
-abc_dat = RunUMAP(abc_dat,reduction="harmony",dims=1:50)
-abc_dat = FindNeighbors(abc_dat)
-abc_dat = FindClusters(abc_dat,resolution=0.2)
-
-FeaturePlot(abc_dat,features=abc_markers)
-
-abcs = subset(b_cells,TBX21>0)
-p1=DimPlot(subset(abcs,source=="CSF"),split.by="phenotype")+ggtitle("CSF")
-p2=DimPlot(subset(abcs,source=="PBMC"),split.by="phenotype")+ggtitle("PBMC")
-grid.arrange(p1,p2,nrow=2)
-
-abc_counts = abcs@meta.data %>%
-  dplyr::count(phenotype,source,cell_type)
-total_counts =b_cells@meta.data %>%
-  dplyr::count(phenotype,source,cell_type)
-
-plot_dat = total_counts %>%
-  left_join(abc_counts,
-  by=c("phenotype","source","cell_type")) %>%
-  mutate(prop = n.y/n.x)
-
-ggplot(plot_dat %>% filter(cell_type %in% c("Memory B cells","Naive B cells","Plasma cells")),aes(phenotype,prop,fill=cell_type))+geom_col(position=position_dodge(),color="black")+facet_wrap(~source)+theme_minimal()+scale_fill_brewer(palette="Set3")+labs(y="Proportion of cells\nexpressing T-bet")

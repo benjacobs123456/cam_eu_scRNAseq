@@ -19,7 +19,7 @@
 #! The skylake/skylake-himem nodes have 32 CPUs (cores) each.
 #SBATCH --ntasks=1
 #! How much wallclock time will be required?
-#SBATCH --time=2:00:00
+#SBATCH --time=1:00:00
 #! What types of email messages do you wish to receive?
 #SBATCH --mail-type=NONE
 #! Uncomment this to prevent the job from being requeued (e.g. if
@@ -28,8 +28,8 @@
 #SBATCH --export=ALL
 #! For 6GB per CPU, set "-p skylake"; for 12GB per CPU, set "-p skylake-himem":
 #SBATCH -p icelake
-#SBATCH --cpus-per-task=4
-#SBATCH --array=1-7
+#SBATCH --cpus-per-task=76
+#SBATCH --array=1-66
 
 
 #! Number of nodes and tasks per node allocated by SLURM (do not change):
@@ -41,24 +41,34 @@ mpi_tasks_per_node=$(echo "$SLURM_TASKS_PER_NODE" | sed -e  's/^\([0-9][0-9]*\).
 #! (note that SLURM reproduces the environment at submission irrespective of ~/.bashrc):
 . /etc/profile.d/modules.sh                # Leave this line (enables the module command)
 module purge                               # Removes all modules still loaded
-module load rhel7/default-peta4            # REQUIRED - loads the basic environment
+module load rhel8/default-icl              # REQUIRED - loads the basic environment
 source /home/hpcjaco1/.bashrc
-source activate /home/hpcjaco1/.conda/envs/celltypist/
 
 #! Insert additional module load commands after this line if needed:
 cd /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/scripts/joint_eu_cam/
+
+# run R prep script
+module load R/4.1.0-icelake
+Rscript celltypist_prep.R $SLURM_ARRAY_TASK_ID
+
+# load conda env 
+
+source activate /home/hpcjaco1/.conda/envs/celltypist/
+
+outclust=$(echo $SLURM_ARRAY_TASK_ID-1 | bc)
+source activate /home/hpcjaco1/.conda/envs/celltypist/
 celltypist \
---indata /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/datasets/all_combo_celltypist_counts_chunk_$SLURM_ARRAY_TASK_ID\.tsv \
+--indata /rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/datasets/all_combo_celltypist_counts_cluster_$outclust\.tsv \
 --model Immune_All_High.pkl \
---outdir /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/datasets/ \
---prefix lowres_chunk$SLURM_ARRAY_TASK_ID \
+--outdir /rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/datasets/ \
+--prefix lowres_cluster$outclust \
 --majority-voting
 
 celltypist \
---indata /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/datasets/all_combo_celltypist_counts_chunk_$SLURM_ARRAY_TASK_ID\.tsv \
+--indata /rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/datasets/all_combo_celltypist_counts_cluster_$outclust\.tsv \
 --model Immune_All_Low.pkl \
---outdir /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/datasets/ \
---prefix highres_chunk$SLURM_ARRAY_TASK_ID \
+--outdir /rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/datasets/ \
+--prefix highres_cluster$outclust \
 --majority-voting
 
 

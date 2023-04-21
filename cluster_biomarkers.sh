@@ -53,7 +53,7 @@ module load R/4.0.3
 #! Insert additional module load commands after this line if needed:
 
 cd /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/scripts/joint_eu_cam/
-Rscript cluster_biomarkers.R
+Rscript find_cluster_biomarkers.R
 
 #! Work directory (i.e. where the job will run):
 workdir="$SLURM_SUBMIT_DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory

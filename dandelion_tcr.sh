@@ -1,7 +1,7 @@
 #!/bin/bash
 #!
-#! Example SLURM job script for Peta4-Skylake (Skylake CPUs, OPA)
-#! Last updated: Mon 13 Nov 12:25:17 GMT 2017
+#! Example SLURM job script for Peta4-IceLake (Ice Lake CPUs, HDR200 IB)
+#! Last updated: Sat Jul 31 15:39:45 BST 2021
 #!
 
 #!#############################################################
@@ -10,29 +10,35 @@
 
 #! sbatch directives begin here ###############################
 #! Name of the job:
-#SBATCH -J de_da
+#SBATCH -J dandelion_tcr
 #! Which project should be charged:
 #SBATCH -A SAWCER-SL3-CPU
+#SBATCH -p icelake
 #! How many whole nodes should be allocated?
 #SBATCH --nodes=1
-#! How many (MPI) tasks will there be in total? (<= nodes*32)
-#! The skylake/skylake-himem nodes have 32 CPUs (cores) each.
+#! How many (MPI) tasks will there be in total? (<= nodes*76)
+#! The Ice Lake (icelake) nodes have 76 CPUs (cores) each and
+#! 3380 MiB of memory per CPU.
 #SBATCH --ntasks=1
 #! How much wallclock time will be required?
-#SBATCH --time=8:00:00
+#SBATCH --time=08:00:00
 #! What types of email messages do you wish to receive?
 #SBATCH --mail-type=NONE
 #! Uncomment this to prevent the job from being requeued (e.g. if
 #! interrupted by node failure or system downtime):
-#SBATCH --no-requeue
-
-#! For 6GB per CPU, set "-p skylake"; for 12GB per CPU, set "-p skylake-himem":
-#SBATCH -p cclake-himem
-#SBATCH --cpus-per-task=32
+##SBATCH --no-requeue
 
 #! sbatch directives end here (put any additional directives above this line)
 
-
+#! Notes:
+#! Charging is determined by cpu number*walltime.
+#! The --ntasks value refers to the number of tasks to be launched by SLURM only. This
+#! usually equates to the number of MPI tasks launched. Reduce this from nodes*76 if
+#! demanded by memory requirements, or if OMP_NUM_THREADS>1.
+#! Each task is allocated 1 CPU by default, and each CPU is allocated 3380 MiB
+#! of memory. If this is insufficient, also specify
+#! --cpus-per-task and/or --mem (the latter specifies MiB per node).
+#SBATCH --cpus-per-task 16
 
 #! Number of nodes and tasks per node allocated by SLURM (do not change):
 numnodes=$SLURM_JOB_NUM_NODES
@@ -46,20 +52,49 @@ mpi_tasks_per_node=$(echo "$SLURM_TASKS_PER_NODE" | sed -e  's/^\([0-9][0-9]*\).
 #! (note that SLURM reproduces the environment at submission irrespective of ~/.bashrc):
 . /etc/profile.d/modules.sh                # Leave this line (enables the module command)
 module purge                               # Removes all modules still loaded
-module load rhel7/default-peta4            # REQUIRED - loads the basic environment
-module load R/4.0.3
+module load rhel8/default-icl              # REQUIRED - loads the basic environment
 
 #! Insert additional module load commands after this line if needed:
 
-cd /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/scripts/joint_eu_cam/
-Rscript de_da_tests_2112.R
+echo "Running singularity dandelion for TCRs"
 
-#! Work directory (i.e. where the job will run):
-workdir="$SLURM_SUBMIT_DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory
-                             # in which sbatch is run.
+cd /rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/dandelion_inputs/TCR/
+
+# split meta files
+for i in {1..214};
+  do
+    echo Doing donor $i of 214
+
+    # filter meta file to just this person
+    module load R/4.1.0-icelake
+    Rscript /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/scripts/joint_eu_cam/dandelion_bcr_filter_to_donor.R $i &
+  done
+
+wait
+for i in {1..214};
+  do
+    echo Doing donor $i of 214
+    # filter meta file to just this person
+    module load R/4.1.0-icelake
+    Rscript /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/scripts/joint_eu_cam/dandelion_bcr_filter_to_donor.R $i
+
+    # run dandelion
+    META_FILE=meta_file_donor_$i
+
+    singularity run -B $PWD --env R_LIBS_USER=~/dummy/:$R_LIBS_USER \
+    ~/dandelion_jan23/sc-dandelion.sif dandelion-preprocess \
+    --file_prefix "filtered" \
+    --filter_to_high_confidence \
+    --keep_trailing_hyphen_number \
+    --chain TR \
+    --meta $META_FILE &
+  done
+
+
+wait
 
 #! Are you using OpenMP (NB this is unrelated to OpenMPI)? If so increase this
-#! safe value to no more than 32:
+#! safe value to no more than 76:
 export OMP_NUM_THREADS=1
 
 #! Number of MPI tasks to be started by the application per node and in total (do not change):
@@ -79,11 +114,11 @@ export I_MPI_PIN_ORDER=scatter # Adjacent domains have minimal sharing of caches
 #! Uncomment one choice for CMD below (add mpirun/mpiexec options if necessary):
 
 #! Choose this for a MPI code (possibly using OpenMP) using Intel MPI.
-CMD="mpirun -ppn $mpi_tasks_per_node -np $np $application $options"
+#CMD="mpirun -ppn $mpi_tasks_per_node -np $np $application $options"
 
 #! Choose this for a pure shared-memory OpenMP parallel program on a single node:
 #! (OMP_NUM_THREADS threads will be created):
-#CMD="$application $options"
+CMD="$application $options"
 
 #! Choose this for a MPI code (possibly using OpenMP) using OpenMPI:
 #CMD="mpirun -npernode $mpi_tasks_per_node -np $np $application $options"

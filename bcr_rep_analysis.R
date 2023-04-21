@@ -25,10 +25,10 @@ library(alakazam)
 sessionInfo()
 reticulate::py_config()
 
-setwd("/rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined")
+setwd("/home/hpcjaco1/rds/hpc-work/Cambridge_EU_combined/BCR")
 
 # read in B cell GEX data
-b_cells = readRDS("./datasets/b_cells.rds")
+b_cells = readRDS("../b_cells.rds")
 
 
 ##############################
@@ -36,28 +36,172 @@ b_cells = readRDS("./datasets/b_cells.rds")
 ##############################
 
 # load BCR VDJ files post-processing (by singularity dandelion)
-samples = list.files("/rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/dandelion_inputs/BCR/")
-samples = samples[grepl("CSF",samples)|grepl("PBMC",samples)]
+meta = read_csv("../dandelion_inputs/BCR/meta_file.csv")
 
 files = list()
-for (i in 1:length(samples)){
-    filename = paste0("/rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/dandelion_inputs/BCR/",samples[i],"/dandelion/filtered_contig_igblast_db-pass_genotyped.tsv")
-    files[[i]] = read_tsv(filename)
+for (i in 1:nrow(meta)){
+    this_sample = meta$sample[i]
+    this_person = meta$individual[i]
+    file_path = paste0("../dandelion_inputs/BCR/",this_sample,"/dandelion/filtered_contig_dandelion.tsv")
+    dat = read_tsv(file_path,col_types = cols_only(
+        sequence_id = col_character(),
+        sequence = col_character(),
+        rev_comp = col_logical(),
+        productive = col_logical(),
+        v_call = col_character(),
+        d_call = col_character(),
+        j_call = col_character(),
+        sequence_alignment = col_character(),
+        germline_alignment = col_character(),
+        junction = col_character(),
+        junction_aa = col_character(),
+        v_cigar = col_character(),
+        d_cigar = col_character(),
+        j_cigar = col_character(),
+        stop_codon = col_logical(),
+        vj_in_frame = col_logical(),
+        locus = col_character(),
+        c_call = col_character(),
+        junction_length = col_double(),
+        np1_length = col_double(),
+        np2_length = col_double(),
+        v_sequence_start = col_double(),
+        v_sequence_end = col_double(),
+        v_germline_start = col_double(),
+        v_germline_end = col_double(),
+        d_sequence_start = col_double(),
+        d_sequence_end = col_double(),
+        d_germline_start = col_double(),
+        d_germline_end = col_double(),
+        j_sequence_start = col_double(),
+        j_sequence_end = col_double(),
+        j_germline_start = col_double(),
+        j_germline_end = col_double(),
+        v_score = col_double(),
+        v_identity = col_double(),
+        v_support = col_double(),
+        d_score = col_double(),
+        d_identity = col_double(),
+        d_support = col_double(),
+        j_score = col_double(),
+        j_identity = col_double(),
+        j_support = col_double(),
+        fwr1 = col_character(),
+        fwr2 = col_character(),
+        fwr3 = col_character(),
+        fwr4 = col_character(),
+        cdr1 = col_character(),
+        cdr2 = col_character(),
+        cdr3 = col_character(),
+        cell_id = col_character(),
+        consensus_count = col_double(),
+        duplicate_count = col_double(),
+        v_call_10x = col_character(),
+        d_call_10x = col_character(),
+        j_call_10x = col_character(),
+        junction_10x = col_character(),
+        junction_10x_aa = col_character(),
+        j_support_igblastn = col_double(),
+        j_score_igblastn = col_double(),
+        j_call_igblastn = col_character(),
+        j_call_blastn = col_character(),
+        j_identity_blastn = col_double(),
+        j_alignment_length_blastn = col_double(),
+        j_number_of_mismatches_blastn = col_double(),
+        j_number_of_gap_openings_blastn = col_double(),
+        j_sequence_start_blastn = col_double(),
+        j_sequence_end_blastn = col_double(),
+        j_germline_start_blastn = col_double(),
+        j_germline_end_blastn = col_double(),
+        j_support_blastn = col_double(),
+        j_score_blastn = col_double(),
+        j_sequence_alignment_blastn = col_character(),
+        j_germline_alignment_blastn = col_character(),
+        j_source = col_logical(),
+        d_support_igblastn = col_double(),
+        d_score_igblastn = col_double(),
+        d_call_igblastn = col_character(),
+        d_call_blastn = col_character(),
+        d_identity_blastn = col_double(),
+        d_alignment_length_blastn = col_double(),
+        d_number_of_mismatches_blastn = col_double(),
+        d_number_of_gap_openings_blastn = col_double(),
+        d_sequence_start_blastn = col_double(),
+        d_sequence_end_blastn = col_double(),
+        d_germline_start_blastn = col_double(),
+        d_germline_end_blastn = col_double(),
+        d_support_blastn = col_double(),
+        d_score_blastn = col_double(),
+        d_sequence_alignment_blastn = col_character(),
+        d_germline_alignment_blastn = col_character(),
+        d_source = col_logical(),
+        v_call_genotyped = col_character(),
+        germline_alignment_d_mask = col_character(),
+        sample_id = col_character(),
+        c_sequence_alignment = col_character(),
+        c_germline_alignment = col_character(),
+        c_sequence_start = col_double(),
+        c_sequence_end = col_double(),
+        c_score = col_double(),
+        c_identity = col_double(),
+        c_call_10x = col_character(),
+        junction_aa_length = col_double(),
+        fwr1_aa = col_character(),
+        fwr2_aa = col_character(),
+        fwr3_aa = col_character(),
+        fwr4_aa = col_character(),
+        cdr1_aa = col_character(),
+        cdr2_aa = col_character(),
+        cdr3_aa = col_character(),
+        sequence_alignment_aa = col_character(),
+        v_sequence_alignment_aa = col_character(),
+        d_sequence_alignment_aa = col_character(),
+        j_sequence_alignment_aa = col_character(),
+        complete_vdj = col_logical(),
+        j_call_multimappers = col_character(),
+        j_call_multiplicity = col_double(),
+        j_call_sequence_start_multimappers = col_double(),
+        j_call_sequence_end_multimappers = col_double(),
+        j_call_support_multimappers = col_double(),
+        mu_count = col_double(),
+        mu_freq = col_double()
+      )
+    )
+
+    dat$sequence_id = paste0(this_person,"_",str_remove(dat$sequence_id,paste0(this_sample,"_")))
+    dat$cell_id = paste0(this_person,"_",str_remove(dat$cell_id,paste0(this_sample,"_")))
+    files[[i]] = dat
 }
-combined_bcr = do.call(rbind, files)
+combined_bcr = do.call("bind_rows", files)
 
 # create a column called filter_rna and set it to FALSE
 b_cells@meta.data$filter_rna = FALSE
 
 # revert to old barcodes (get rid of extra bits added due to duplicates)
-original_barcodes = str_split_fixed(rownames(b_cells@meta.data),pattern="-",n=2)[,1]
-b_cells@meta.data$original_barcode = original_barcodes
+b_cells@meta.data$original_barcode = rownames(b_cells@meta.data)
 
-# add in source and donor id
-b_cells@meta.data$original_barcode = paste0(b_cells@meta.data$source,"_",b_cells@meta.data$donor.id,"_",b_cells@meta.data$original_barcode)
+get_orig_barcode = function(x){
+y = str_split_fixed(x,n=2,"_")[1,1]
+return(y)
+}
+b_cells@meta.data$original_barcode = sapply(b_cells@meta.data$original_barcode,get_orig_barcode)
+
+# add in donor id
+b_cells@meta.data$original_barcode = paste0(b_cells@meta.data$iid,"_",b_cells@meta.data$original_barcode)
+
+# find duplicates
+non_duplicated_barcodes = b_cells@meta.data %>% dplyr::count(original_barcode) %>% filter(n==1)
+combined_bcr = combined_bcr %>% filter(cell_id %in% non_duplicated_barcodes$original_barcode)
+
+# filter to cells in VDJ
+b_cells = subset(b_cells, original_barcode %in% combined_bcr$cell_id & original_barcode %in% non_duplicated_barcodes$original_barcode)
+
+# filter VDJ to contigs with GEX data
+combined_bcr = combined_bcr %>% filter(cell_id %in% b_cells@meta.data$original_barcode)
 
 # rename cells with new barcodes
 b_cells = RenameCells(b_cells,new.names=b_cells@meta.data$original_barcode)
+
 
 # change to python object
 sc = import("scanpy")
@@ -76,7 +220,6 @@ vdj_results_list = ddl$pp$filter_contigs(combined_bcr,
   filter_poorqualitycontig=TRUE,
   filter_vj_chains=T,
   filter_missing=T,
-  filter_poorqualitycontig=T,
   productive_only = T,
   keep_highest_umi=TRUE)
 
@@ -88,7 +231,7 @@ filter_contig == "FALSE") %>% nrow()
 
 ann_df = vdj_results_list[[2]]$obs %>% data.frame
 qc_stats = ann_df %>% dplyr::count(has_contig,contig_QC_pass,filter_contig,filter_contig_quality,filter_contig_VJ,filter_contig_VDJ)
-write_csv(qc_stats,"./bcr/vdj_qc_stats.csv")
+write_csv(qc_stats,"vdj_qc_stats.csv")
 
 # filter cells which don't have 2 contigs exactly
 bad_cells = vdj_results_list[[1]]$data %>% group_by(cell_id) %>% dplyr::count() %>% filter(n!=2)
@@ -102,21 +245,21 @@ ddl$tl$find_clones(vdj_results_list[[1]])
 # find clone size
 ddl$tl$clone_size(vdj_results_list[[1]])
 
-
-
 # generate BCR network
 # ddl$tl$generate_network(vdj_results_list[[1]])
 
-# get back into seurat to visualise
+# get back into seurat
 add_col_to_metadata = function(x){
   col_to_add = unlist(vdj_results_list[[1]]$metadata[[x]])
   names(col_to_add) <- row.names(vdj_results_list[[1]]$metadata)
   b_cells <<- AddMetaData(b_cells, col_to_add, x)
 }
 sapply(colnames(vdj_results_list[[1]]$metadata),add_col_to_metadata)
+
 # get rid of cells without BCR data
 cells_in_vdj = rownames(vdj_results_list[[1]]$metadata)
 b_cells = subset(b_cells,subset = original_barcode %in% cells_in_vdj)
+
 # rename Idents
 b_cells@meta.data$cell_type = Idents(b_cells)
 
@@ -161,6 +304,7 @@ b_cells@meta.data$r_s_ratio = b_cells@meta.data$heavychain_mu_freq_cdr_r / b_cel
 b_cells@meta.data = b_cells@meta.data  %>% mutate(cdr3_mu_freq_overall = (heavychain_mu_freq_cdr_r+heavychain_mu_freq_cdr_s+lightchain_mu_freq_cdr_r+lightchain_mu_freq_cdr_s)/2)
 b_cells@meta.data = b_cells@meta.data  %>% mutate(shm_positive = ifelse(cdr3_mu_freq_overall==0,"No","Yes"))
 
+rownames(b_cells@meta.data) = colnames(b_cells)
 # save progress
 saveRDS(b_cells,"b_cells_post_processing.rds")
 
@@ -179,6 +323,6 @@ diversity = cc_status %>% left_join(diversity,by="donor.id")
 q2 = diversity %>% filter(q==2) %>% filter(phenotype=="MS")
 p2 = ggplot(q2,aes(source,d,fill=source))+geom_boxplot()+ggtitle("Simpson's Diversity Index: MS CSF B cells vs PBMC")+theme_classic()
 
-png(res=300,units="in",height=6,width=6,"./bcr/diversity.png")
+png(res=300,units="in",height=6,width=6,"diversity.png")
 p2
 dev.off()

@@ -10,7 +10,7 @@
 
 #! sbatch directives begin here ###############################
 #! Name of the job:
-#SBATCH -J de_da
+#SBATCH -J eqtl
 #! Which project should be charged:
 #SBATCH -A SAWCER-SL3-CPU
 #! How many whole nodes should be allocated?
@@ -25,10 +25,10 @@
 #! Uncomment this to prevent the job from being requeued (e.g. if
 #! interrupted by node failure or system downtime):
 #SBATCH --no-requeue
-
+#SBATCH --export=ALL
 #! For 6GB per CPU, set "-p skylake"; for 12GB per CPU, set "-p skylake-himem":
-#SBATCH -p cclake-himem
-#SBATCH --cpus-per-task=32
+#SBATCH -p skylake
+#SBATCH --cpus-per-task=16
 
 #! sbatch directives end here (put any additional directives above this line)
 
@@ -47,16 +47,17 @@ mpi_tasks_per_node=$(echo "$SLURM_TASKS_PER_NODE" | sed -e  's/^\([0-9][0-9]*\).
 . /etc/profile.d/modules.sh                # Leave this line (enables the module command)
 module purge                               # Removes all modules still loaded
 module load rhel7/default-peta4            # REQUIRED - loads the basic environment
+
 module load R/4.0.3
 
-#! Insert additional module load commands after this line if needed:
+# navigate to the wd
+cd /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/tcr/
 
-cd /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/scripts/joint_eu_cam/
-Rscript de_da_tests_2112.R
+Rscript /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/scripts/joint_eu_cam/tcr_analysis_1910.R
 
 #! Work directory (i.e. where the job will run):
 workdir="$SLURM_SUBMIT_DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory
-                             # in which sbatch is run.
+                         # in which sbatch is run.
 
 #! Are you using OpenMP (NB this is unrelated to OpenMPI)? If so increase this
 #! safe value to no more than 32:
@@ -116,3 +117,5 @@ echo -e "\nnumtasks=$numtasks, numnodes=$numnodes, mpi_tasks_per_node=$mpi_tasks
 echo -e "\nExecuting command:\n==================\n$CMD\n"
 
 eval $CMD
+
+

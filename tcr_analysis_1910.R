@@ -95,16 +95,16 @@ dev.off()
 ##############################
 # cluster biomarkers
 ##############################
-#biomarkers = FindAllMarkers(t_cells,recorrect_umi=FALSE,logfc.threshold=0.25,min.pct=0.25,only.pos=TRUE)
-#topbiomarkers = biomarkers %>% group_by(cluster) %>% slice_min(order_by=p_val_adj,n=5)
-#write_csv(topbiomarkers,"biomarkers.csv")
-#write_csv(biomarkers,"all_biomarkers.csv")
+biomarkers = FindAllMarkers(t_cells,recorrect_umi=FALSE,logfc.threshold=0.5,min.pct=0.5,only.pos=TRUE)
+topbiomarkers = biomarkers %>% group_by(cluster) %>% slice_min(order_by=p_val_adj,n=5)
+write_csv(topbiomarkers,"biomarkers.csv")
+write_csv(biomarkers,"all_biomarkers.csv")
 
 #######################################
 # DA & composition
 #######################################
 
-common_cell_types = t_cells@meta.data %>% dplyr::count(cell_type) %>% filter(n>20)
+common_cell_types = t_cells@meta.data %>% dplyr::count(ann_celltypist_highres) %>% filter(n>20)
 
 # create new unique ID with donor and source
 t_cells@meta.data = t_cells@meta.data %>% mutate(donor_source = paste0(donor.id,"_",source))
@@ -148,7 +148,7 @@ p
 dev.off()
 
 # split by source
-p=DimPlot(subset(t_cells,ann_celltypist_highres %in% common_cell_types$cell_type),label=F,raster=F,group.by="cell_type",split.by="source")+
+p=DimPlot(subset(t_cells,ann_celltypist_highres %in% common_cell_types$ann_celltypist_highres),label=F,raster=F,group.by="cell_type",split.by="source")+
 scale_color_manual(values = colour_pal)+
 ggtitle("")+
 theme_minimal()+
@@ -279,7 +279,7 @@ t_cells@meta.data$phenotype = factor(t_cells@meta.data$phenotype,levels=c("Nonin
 
 # proportion plots
 png("./crude_labels_proportion_cell_counts_barplot.png",res=300,width=7,height=4,units="in")
-ggplot(t_cells@meta.data %>% filter(cell_type %in% common_cell_types$cell_type),aes(phenotype,fill=cell_type))+
+ggplot(t_cells@meta.data %>% filter(cell_type %in% common_cell_types$ann_celltypist_highres),aes(phenotype,fill=cell_type))+
 geom_bar(position="fill",color="black")+
 facet_wrap(~source)+
 scale_fill_manual(values = colour_pal)+
@@ -289,17 +289,17 @@ dev.off()
 
 plots = list()
 for(pheno in c("MS","OIND","Noninflammatory")){
-p=ggplot(t_cells@meta.data %>%
-filter(phenotype==pheno),
-aes(donor.id,fill=cell_type))+
-geom_bar(position="fill",color="black")+
-facet_wrap(~source)+
-scale_fill_manual(values = colour_pal)+
-theme_classic()+
-labs(x="Donor",y="Proportion",fill="Cell type")+
-ggtitle(pheno)+
-theme(legend.position="none",axis.text.x=element_blank())
-plots[[length(plots)+1]] = p
+  p=ggplot(t_cells@meta.data %>%
+  filter(phenotype==pheno),
+  aes(donor.id,fill=cell_type))+
+  geom_bar(position="fill",color="black")+
+  facet_wrap(~source)+
+  scale_fill_manual(values = colour_pal)+
+  theme_classic()+
+  labs(x="Donor",y="Proportion",fill="Cell type")+
+  ggtitle(pheno)+
+  theme(legend.position="none",axis.text.x=element_blank())
+  plots[[length(plots)+1]] = p
 }
 
 png("./crude_labels_proportion_cell_counts_barplot_per_individual.png",res=300,width=12,height=4,units="in")
@@ -315,45 +315,45 @@ mutate(drb_pos = ifelse(drb1_1501_dose > 0 ,"DRB1*15+","DRB1*15-"))
 
 plots = list()
 for(pheno in c("RMS","PPMS")){
-p=ggplot(t_cells@meta.data %>%
-filter(Category_fine==pheno),
-aes(donor.id,fill=cell_type))+
-geom_bar(position="fill",color="black")+
-facet_wrap(~source)+
-scale_fill_manual(values = colour_pal)+
-theme_classic()+
-labs(x="Donor",y="Proportion",fill="Cell type")+
-ggtitle(pheno)+
-theme(legend.position="none",axis.text.x=element_blank())
-plots[[length(plots)+1]] = p
+  p=ggplot(t_cells@meta.data %>%
+  filter(Category_fine==pheno),
+  aes(donor.id,fill=cell_type))+
+  geom_bar(position="fill",color="black")+
+  facet_wrap(~source)+
+  scale_fill_manual(values = colour_pal)+
+  theme_classic()+
+  labs(x="Donor",y="Proportion",fill="Cell type")+
+  ggtitle(pheno)+
+  theme(legend.position="none",axis.text.x=element_blank())
+  plots[[length(plots)+1]] = p
 }
 
 for(oligo_status in c("OCB+","OCB-")){
-p=ggplot(t_cells@meta.data %>%
-filter(phenotype=="MS" & oligo_pos == oligo_status),
-aes(donor.id,fill=cell_type))+
-geom_bar(position="fill",color="black")+
-facet_wrap(~source)+
-scale_fill_manual(values = colour_pal)+
-theme_classic()+
-labs(x="Donor",y="Proportion",fill="Cell type")+
-ggtitle(oligo_status)+
-theme(legend.position="none",axis.text.x=element_blank())
-plots[[length(plots)+1]] = p
+  p=ggplot(t_cells@meta.data %>%
+  filter(phenotype=="MS" & oligo_pos == oligo_status),
+  aes(donor.id,fill=cell_type))+
+  geom_bar(position="fill",color="black")+
+  facet_wrap(~source)+
+  scale_fill_manual(values = colour_pal)+
+  theme_classic()+
+  labs(x="Donor",y="Proportion",fill="Cell type")+
+  ggtitle(oligo_status)+
+  theme(legend.position="none",axis.text.x=element_blank())
+  plots[[length(plots)+1]] = p
 }
 
 for(drb_status in c("DRB1*15+","DRB1*15-")){
-p=ggplot(t_cells@meta.data %>%
-filter(phenotype=="MS" & drb_pos == drb_status & !is.na(drb_pos)),
-aes(donor.id,fill=cell_type))+
-geom_bar(position="fill",color="black")+
-facet_wrap(~source)+
-scale_fill_manual(values = colour_pal)+
-theme_classic()+
-labs(x="Donor",y="Proportion",fill="Cell type")+
-ggtitle(drb_status)+
-theme(legend.position="none",axis.text.x=element_blank())
-plots[[length(plots)+1]] = p
+  p=ggplot(t_cells@meta.data %>%
+  filter(phenotype=="MS" & drb_pos == drb_status & !is.na(drb_pos)),
+  aes(donor.id,fill=cell_type))+
+  geom_bar(position="fill",color="black")+
+  facet_wrap(~source)+
+  scale_fill_manual(values = colour_pal)+
+  theme_classic()+
+  labs(x="Donor",y="Proportion",fill="Cell type")+
+  ggtitle(drb_status)+
+  theme(legend.position="none",axis.text.x=element_blank())
+  plots[[length(plots)+1]] = p
 }
 
 png("./crude_labels_proportion_cell_counts_barplot_per_individual_by_ms_subtype.png",res=300,width=12,height=4,units="in")
@@ -364,19 +364,19 @@ dev.off()
 
 # first clean variables
 t_cells@meta.data = t_cells@meta.data %>%
-mutate(oligo_pos = ifelse(
-oligo_pos == "OCB+",
-"OCBpos",
-"OCBneg"
+  mutate(oligo_pos = ifelse(
+  oligo_pos == "OCB+",
+  "OCBpos",
+  "OCBneg"
 ))
 
 t_cells@meta.data = t_cells@meta.data %>%
-mutate(drb_pos = ifelse(
-drb_pos == "DRB1*15+",
-"DRBpos",
-ifelse(!is.na(drb_pos),
-"DRBneg",
-NA
+  mutate(drb_pos = ifelse(
+  drb_pos == "DRB1*15+",
+  "DRBpos",
+  ifelse(!is.na(drb_pos),
+  "DRBneg",
+  NA
 )))
 
 do_da = function(x, contrasts_to_test){
@@ -1177,9 +1177,8 @@ binary_comparison_celltypes(variable = "expanded_clone",plot_title="Clonal expan
 
 # compare csf in ms vs controls
 
-common_cell_types = t_cells@meta.data %>% dplyr::count(cell_type) %>% filter(n>200)
 ms_v_cont_csf_plot = function(x){
-DimPlot(subset(t_cells,source=="CSF" & cell_type %in% common_cell_types$cell_type),split.by="phenotype",group.by=x)+
+DimPlot(subset(t_cells,source=="CSF" & cell_type %in% common_cell_types$ann_celltypist_highres),split.by="phenotype",group.by=x)+
 scale_color_brewer(palette="Set1")+
 theme_minimal()+
 theme(axis.title.x=element_blank(),axis.title.y=element_blank(),axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())
@@ -1245,7 +1244,353 @@ png("clonal_proportions_source.png",res=300,height=4,width=4,units="in")
 p1
 dev.off()
 
+rownames(t_cells@meta.data) = colnames(t_cells)
 
+plot_dat = subset(t_cells,phenotype=="MS" & cell_type %in% common_cell_types$ann_celltypist_highres)
+# compare expanded vs non-expanded in MS
+expanded_v_not_plot = function(x){
+DimPlot(plot_dat,
+split.by="expanded_clone",group.by=x)+
+scale_color_brewer(palette="Set1")+
+theme_minimal()+
+theme(axis.text.y=element_blank(),
+axis.text.x=element_blank(),
+panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(),
+axis.title.x = element_blank(),
+axis.title.y = element_blank())
+}
+
+p0=expanded_v_not_plot("cell_type")+ggtitle("Cell type")
+p1=expanded_v_not_plot("trbv_family")+ggtitle("TRBV")
+p2=expanded_v_not_plot("source")+ggtitle("Compartment")
+
+png("expanded_v_not_tcrs_just_ms.png",res=300,units="in",height=10,width=10)
+grid.arrange(p0,p1,p2)
+dev.off()
+
+
+#######################################
+# Clonal phenotypes
+#######################################
+
+# bar plots
+make_categorical_plot = function(x){
+  ggplot(t_cells@meta.data,aes(phenotype,fill=t_cells@meta.data[[x]]))+
+  geom_bar(position="fill",color="black")+
+  facet_wrap(~expanded_clone)+
+  theme_bw()+
+  scale_fill_brewer(palette = "Set3")+
+  labs(x="Phenotype",fill=x,y="Proportion")
+}
+
+make_continuous_plot = function(x){
+  ggplot(t_cells@meta.data,aes(phenotype,fill=cell_type,y=t_cells@meta.data[[x]]))+
+  geom_boxplot(color="black")+
+  facet_wrap(~expanded_clone)+
+  theme_bw()+
+  scale_fill_brewer(palette = "Set3")+
+  labs(x="Phenotype",y=x)
+}
+
+var_list = list("cell_type","source","trbv_family","status_summary","c_call_VDJ")
+plot_list = lapply(var_list,make_categorical_plot)
+
+png("expanded_vs_not_tcr_rep.png",res=300,units="in",height=10,width=10)
+do.call("grid.arrange",plot_list)
+dev.off()
+
+p=ggplot(t_cells@meta.data %>% filter(cell_type %in% common_cell_types$ann_celltypist_highres),aes(phenotype,fill=cell_type))+
+  geom_bar(position="fill",color="black")+
+  facet_wrap(~expanded_clone)+
+  theme_bw()+
+  scale_fill_manual(values = colour_pal)+
+  labs(x="Phenotype",fill="Cell type",y="Proportion")
+png("expanded_vs_not_tcr_rep_celltypes.png",res=300,units="in",height=4,width=6)
+p
+dev.off()
+
+
+
+
+do_da_var = function(x, contrasts_to_test,variable,ylim=10, data = t_cells@meta.data,plot_title){
+
+  # get rid of donors with low counts
+  da_dat = data %>%
+    mutate(expanded_clone = ifelse(expanded_clone=="Expanded","expanded","not_expanded")) %>%
+    mutate(donor_expanded = paste0(donor.id,"_",expanded_clone))
+
+
+  donors_to_keep = da_dat %>% dplyr::count(donor_expanded) %>% filter(n>1)
+  da_dat = da_dat %>% filter(donor_expanded %in% donors_to_keep$donor_expanded)
+
+  # stash sample info
+  sample_info = da_dat %>%
+  dplyr::select(donor.id,expanded_clone,x,donor_expanded) %>%
+  filter(!is.na(.data[[x]])) %>%
+  distinct(donor_expanded,.keep_all=TRUE)
+
+  data_for_abundances = da_dat %>%
+  dplyr::select(donor.id,expanded_clone,x,donor_expanded,.data[[variable]]) %>%
+  filter(!is.na(.data[[x]]))
+  abundances = table(data_for_abundances[[variable]],data_for_abundances$donor_expanded)
+
+  # filter out clusters with <10 counts
+  abundances = abundances[rowSums(abundances)>10,]
+
+  sample_info = sample_info %>% filter(donor_expanded %in% colnames(abundances))
+  sample_info = sample_info[match(colnames(abundances),sample_info$donor_expanded),]
+  sample_info$grouping = paste0(sample_info[[x]],"_",sample_info$expanded_clone)
+
+
+  y.ab = DGEList(abundances, samples=sample_info)
+
+  # update sample info
+  y.ab$samples =  y.ab$samples %>% left_join(da_dat %>%
+  filter(!is.na(.data[[x]])) %>%
+  distinct(donor_expanded,.keep_all=TRUE) %>% dplyr::select(Age,Gender,donor_expanded),by="donor_expanded")
+
+  da_overall_list = list()
+  results_df = data.frame()
+  design <- model.matrix(~ 0 + grouping + Age + Gender,y.ab$sample)
+  colnames(design) = c(levels(factor(y.ab$samples$grouping)),"Age","Gender")
+
+  y.ab <- estimateDisp(y.ab, design,trend="none")
+  fit <- glmQLFit(y.ab, design, robust=TRUE, abundance.trend=FALSE)
+
+
+  # define contrast for testing
+
+  contrast =  makeContrasts(
+    contrasts = contrasts_to_test,
+    levels = design
+  )
+
+  da_plots = list()
+  # do da tests
+  for(i in c(1:length(contrasts_to_test))){
+    contrast_name = colnames(contrast)[i]
+    res = glmQLFTest(fit, contrast = contrast[,i])
+
+    # write to file
+    print(summary(decideTests(res)))
+    res = res$table %>% mutate(P_adj = p.adjust(PValue,method="fdr")) %>% arrange(PValue)
+    res$cell = rownames(res)
+    res$significant = ifelse(res$P_adj<0.01,"yes","no")
+    res$direction = ifelse(res$logFC>0,"Up","Down")
+    comparison_label = contrast_name
+
+    # da plot
+
+    plot = ggplot(res,
+      aes(logFC,-log10(PValue),label=cell))+
+    theme_classic()+
+    geom_text_repel(data = res %>% filter(P_adj<0.001),
+      mapping = aes(logFC,-log10(PValue)),
+      size=2,max.overlaps=100)+
+    geom_hline(yintercept= -log10(0.05/length(res$logFC)),alpha=0.2)+
+    geom_vline(xintercept = 0,alpha=0.2)+
+    NoLegend()+
+    ggtitle(comparison_label)+
+    scale_y_continuous(limits=c(0,ylim))+
+    scale_x_continuous(limits=c(-5,5))+
+    geom_point(shape=16,size=2)+
+    scale_color_manual(values=colour_pal)
+
+
+    png(paste0(plot_title,"_pheno_comparisons_da_plot_",contrast_name,"_",variable,".png"),res=300,units="in",height=3,width=3)
+    print(plot)
+    dev.off()
+    write_csv(res,
+    file=paste0(plot_title,"_pheno_comparisons_da_plot_",contrast_name,"_",variable,".csv"))
+  }
+}
+
+# run DA
+do_da_var(x = "phenotype",
+contrasts_to_test = c("MS_expanded - MS_not_expanded",
+"OIND_expanded - OIND_not_expanded",
+"NIND_expanded - NIND_not_expanded"),
+variable="cell_type",
+plot_title = "cell_type",
+ylim=50)
+
+
+################################
+# de clonal vs not
+################################
+
+t_cells@meta.data = t_cells@meta.data %>% mutate(donor_expanded = paste0(donor.id,"_",expanded_clone))
+
+do_de = function(dat,plot_title,ylim=30){
+  DefaultAssay(dat) = "RNA"
+  cells_for_de = dat
+
+  # print out params
+  message("Cells:",cells_for_de@meta.data %>% nrow)
+  message("Expanded cells:",cells_for_de@meta.data %>% filter(expanded_clone=="Expanded") %>% nrow)
+  message("Non-expanded cells:",cells_for_de@meta.data %>% filter(expanded_clone=="Not expanded") %>% nrow)
+  message("Donors expanded:",cells_for_de@meta.data %>% filter(expanded_clone=="Expanded") %>% distinct(donor.id) %>% nrow)
+  message("Donors non-expanded:",cells_for_de@meta.data %>% filter(expanded_clone=="Not expanded") %>% distinct(donor.id) %>% nrow)
+
+  rownames(cells_for_de@meta.data) = colnames(cells_for_de)
+
+  # tabulate to find out which 'groups' will have insufficient cells for DE
+  min_cells_per_sample = 2
+
+  low_counts = cells_for_de@meta.data %>%
+    group_by(donor.id,expanded_clone) %>%
+    dplyr::count() %>%
+    arrange(n) %>%
+    filter(n<min_cells_per_sample) %>%
+    mutate(donor_to_exclude = paste0(donor.id,"_",expanded_clone))
+
+  # convert to sce object
+  cells_for_de.sce = as.SingleCellExperiment(cells_for_de)
+
+  # aggregate counts
+  groups = colData(cells_for_de.sce)[, c("donor.id","expanded_clone")]
+  aggregated_counts  = aggregate.Matrix(t(counts(cells_for_de.sce)),
+  groupings = groups, fun = "sum") %>% t()
+
+  # remove groups with low cell counts for DE (<n cells)
+  aggregated_counts = aggregated_counts[!rownames(aggregated_counts) %in% low_counts$donor_to_exclude,]
+
+  group_vector = lapply(colnames(aggregated_counts),function(y){
+        if(grepl("Not expanded",y)){
+          "Not_expanded"
+        } else if(grepl("Expanded",y)){
+          "Expanded"
+        }
+      }) %>% unlist %>% factor()
+
+  # make the DGE object
+  y=DGEList(aggregated_counts,group=group_vector,remove.zeros=TRUE)
+
+  # update sample info
+  y$samples =  y$samples %>%
+  mutate(donor_expanded = rownames(y$samples)) %>%
+  left_join(t_cells@meta.data %>%
+  dplyr::select(Age,Gender,donor_expanded) %>%
+  distinct(donor_expanded,.keep_all=TRUE),by="donor_expanded")
+
+  design = model.matrix(~0+group_vector+Age+Gender,y$samples)
+  colnames(design) = c(levels(group_vector),"Age","Gender")
+
+  keep = filterByExpr(
+    y,
+    design = design,
+    group = group_vector,
+    min.count = 10,
+    min.total.count = 15,
+    large.n = 10,
+    min.prop = 0.7)
+  y = y[keep, , keep.lib.sizes=FALSE]
+  y = calcNormFactors(y)
+  y = estimateDisp(y,design,robust=TRUE)
+  fit = glmQLFit(y, design, robust=TRUE)
+  contrast_to_test = makeContrasts("Expanded - Not_expanded",levels = design)
+  res = glmQLFTest(fit, contrast = contrast_to_test)
+
+  print(summary(decideTests(res)))
+  res = res$table %>% mutate(P_adj = p.adjust(PValue,method="fdr")) %>% arrange(PValue)
+  res$gene = rownames(res)
+
+  bonf = 0.05 / length(res$PValue)
+  res$significant = ifelse(res$PValue<bonf,"yes","no")
+  res$direction = ifelse(res$logFC>0,"Up","Down")
+  res = res %>% mutate(direction = ifelse(PValue>bonf,"nonsig",direction))
+
+  total_genes = nrow(res)
+  non_sig = sum(res$significant=="no")
+  sig_up = sum(res$significant=="yes" & res$direction=="Up")
+  sig_down = sum(res$significant=="yes" & res$direction=="Down")
+  # de plot
+  colours = c("Up" = "red", "Down" = "blue", "nonsig" = "grey")
+  plot = ggplot(res,aes(logFC,-log10(PValue),color=direction,label=gene))+
+  theme_bw()+
+  geom_point()+
+  NoLegend()+
+  geom_label_repel(data=res %>% arrange(PValue) %>% head(n=10),mapping=aes(),max.overlaps=500)+
+  scale_color_manual(values = colours)+
+  scale_x_continuous(limits=c(-7,7))+
+  scale_y_continuous(limits=c(0,ylim))
+
+  png(paste0(plot_title,"_expanded_vs_not.png"),res=300,units="in",height=4,width=4)
+  print(plot)
+  dev.off()
+
+  # gsea
+  de = res
+  ranked_genes = de %>% arrange(desc(logFC)) %>% dplyr::select(gene,logFC)
+  ranked_genes_vector = ranked_genes$logFC
+  names(ranked_genes_vector) = ranked_genes$gene
+  message("There are ",nrow(ranked_genes)," genes in this analysis")
+  write_csv(res,file=paste0(plot_title,"_de_expanded_vs_not.csv"))
+
+  # do gsea
+  nperm=100000
+  geneset="hallmark"
+  genelist = eval(parse(text = paste0(geneset,"_list")))
+  res = fgsea(genelist, stats = ranked_genes_vector, minSize=10,eps=0, nPermSimple = nperm)
+  res = res %>% arrange(NES)
+  res$fdr = p.adjust(res$pval,method="fdr")
+  res$pathway = factor(res$pathway,ordered=TRUE,levels=res$pathway)
+  topres = res %>% arrange(pval) %>% head(n=20) %>% arrange(desc(NES))
+  topres$pathway = str_remove(topres$pathway,"HALLMARK_")
+  topres$pathway = factor(topres$pathway,ordered=TRUE,levels=topres$pathway)
+  topres$direction = ifelse(topres$NES>0,"Up","Down")
+  write_csv(res,file=paste0(plot_title,"_gsea_expanded_vs_not.csv"))
+
+  colours = c("Up" = "red", "Down" = "blue")
+  # NB labeled with nominal significance
+  plot = ggplot(topres,aes(NES,pathway,label=ifelse(fdr<0.05,"*"," "),fill=direction))+
+    theme_bw()+
+    labs(x="Normalised enrichment score",fill="Pathway enrichment")+
+    geom_col(color="black")+
+    geom_text(size=5,position = position_dodge(0.5))+
+    scale_fill_manual(values = colours,labels = c("Up in expanded clones","Down in expanded clones"))+
+    guides(alpha=FALSE)+
+    theme_minimal()
+
+  png(paste0(plot_title,"_gsea_expanded_vs_not.png"),res=300,units="in",height=3,width=6)
+  print(plot)
+  dev.off()
+}
+
+do_de(
+  dat = subset(t_cells,phenotype=="MS" & source == "CSF" & cell_type == "Tem/Temra cytotoxic T cells"),
+  ylim = 50,
+  plot_title = "MS_CSF_temra_cd8"
+)
+
+do_de(
+  dat = subset(t_cells,phenotype=="MS" & source == "PBMC" & cell_type == "Tem/Temra cytotoxic T cells"),
+  plot_title = "MS_PBMC_temra_cd8"
+)
+
+do_de(
+  dat = subset(t_cells,phenotype=="MS" & source == "CSF" & cell_type == "Tem/Trm cytotoxic T cells"),
+  plot_title = "MS_CSF_trm_cd8",
+  ylim = 20
+)
+
+
+do_de(
+  dat = subset(t_cells,phenotype=="MS" & source == "PBMC" & cell_type == "Tem/Trm cytotoxic T cells"),
+  plot_title = "MS_PBMC_trm_cd8"
+)
+
+
+do_de(
+  dat = subset(t_cells,phenotype=="MS" & source == "PBMC" & cell_type == "MAIT cells"),
+  plot_title = "MS_PBMC_MAIT"
+)
+
+do_de(
+  dat = subset(t_cells,phenotype=="MS" & source == "CSF" & cell_type == "MAIT cells"),
+  plot_title = "MS_CSF_MAIT"
+)
 
 #######################################
 # Clonal relationships
@@ -1253,7 +1598,7 @@ dev.off()
 
 # find public clones in the dataset
 
-public_clones = t_cells@meta.data %>% group_by(clone_id,donor.id) %>% dplyr::count() %>% group_by(clone_id) %>% dplyr::count(donor.id) %>% arrange(desc(n)) %>% filter(n>1)
+public_clones = t_cells@meta.data %>% group_by(clone_id,donor.id) %>% dplyr::count() %>% dplyr::arrange(desc(n)) %>% ungroup %>% dplyr::count(clone_id) %>% dplyr::arrange(desc(n)) %>% filter(n>1)
 t_cells@meta.data = t_cells@meta.data %>% mutate(private_status = ifelse(clone_id %in% public_clones$clone_id,"Public","Private"))
 
 ms_specific_clones = sapply(public_clones$clone_id, function(clone){
@@ -1263,33 +1608,18 @@ ms_specific_clones = sapply(public_clones$clone_id, function(clone){
 })
 public_clones$ms_specific = ms_specific_clones
 
-# lookup in database
-specific_clones = public_clones %>% filter(ms_specific==TRUE)
-cdr3s = t_cells@meta.data %>%
-filter(clone_id %in% specific_clones$clone_id) %>%
-distinct(clone_id,.keep_all=TRUE) %>%
-dplyr::select(contains("junction"),clone_id,v_call_VDJ,j_call_VDJ)
-specific_clones = specific_clones %>% left_join(cdr3s,by="clone_id")
+public_clones %>% dplyr::count()
+public_clones %>% dplyr::count(ms_specific) %>%
+mutate(total = sum(n)) %>%
+mutate(n/total)
+
+#######################################
+# Clonal specificity
+#######################################
 
 # vdj DB
 # downloaded from https://github.com/antigenomics/vdjdb-db/releases/tag/2021-09-05
 vdj_db = read_tsv("vdjdb.txt")
-
-specific_clones %>% left_join(
-vdj_db %>% dplyr::rename("junction_aa_VDJ" = cdr3),
-by = c("junction_aa_VDJ")) %>%
-filter(gene=="TRB") %>%
-filter(!is.na(antigen.epitope)) %>%
-distinct(junction_aa_VDJ,.keep_all=TRUE) %>%
-dplyr::count(antigen.species)
-
-specific_clones_overlap_with_known_cdr3 = specific_clones %>% left_join(
-vdj_db %>% dplyr::rename("junction_aa_VDJ" = cdr3),
-by = c("junction_aa_VDJ")) %>%
-filter(gene=="TRB") %>%
-filter(!is.na(antigen.epitope)) %>%
-distinct(junction_aa_VDJ,.keep_all=TRUE)
-write_csv(specific_clones_overlap_with_known_cdr3,"specific_clones_overlap_with_known_cdr3.csv")
 
 # whole dataset
 tcr_db_gex = t_cells@meta.data %>% left_join(
@@ -1299,80 +1629,130 @@ filter(gene=="TRB") %>%
 filter(!is.na(antigen.epitope)) %>%
 dplyr::count(antigen.species,phenotype)
 
-totals = t_cells@meta.data %>% group_by(phenotype) %>% dplyr::count() %>% dplyr::rename("total_cells" = n)
+totals = t_cells@meta.data %>%
+  group_by(phenotype) %>%
+  dplyr::count() %>%
+  dplyr::rename("total_cells" = n)
 tcr_db_gex = tcr_db_gex %>% left_join(totals,by="phenotype")
 
-p1=ggplot(tcr_db_gex,aes(n,antigen.species,fill=phenotype))+geom_col(position=position_dodge())
-p2=ggplot(tcr_db_gex,aes(n/total_cells,antigen.species,fill=phenotype))+geom_col(position=position_dodge())
+p=ggplot(tcr_db_gex,
+  aes(n/total_cells * 100,antigen.species,fill=phenotype))+
+  geom_col(position=position_dodge(),color="black")+
+  labs(x = "% of T cells",y="Antigen-specificity")+
+  theme_minimal()
 
-
-png("pathogen_tcrs.png",res=300,units="in",height=6,width=12)
-grid.arrange(p1,p2,nrow=1)
+png("pathogen_tcrs.png",res=300,units="in",height=6,width=6)
+p
 dev.off()
 
 t_cells@meta.data$expanded_clone = factor(t_cells@meta.data$expanded_clone,ordered=T)
-# repeat for clonal vs nonclonal in ms
+
 # whole dataset
-tcr_db_gex = t_cells@meta.data %>% filter(phenotype=="MS") %>%
+tcr_db_gex = t_cells@meta.data %>%
 left_join(
 vdj_db %>% dplyr::rename("junction_aa_VDJ" = cdr3),
 by = c("junction_aa_VDJ")) %>%
 filter(gene=="TRB") %>%
 filter(!is.na(antigen.epitope)) %>%
-dplyr::count(antigen.species,expanded_clone)
+dplyr::count(antigen.species,expanded_clone,phenotype)
 
-totals = t_cells@meta.data %>% group_by(expanded_clone) %>% dplyr::count() %>% dplyr::rename("total_cells" = n)
-tcr_db_gex = tcr_db_gex %>% left_join(totals,by="expanded_clone")
+totals = t_cells@meta.data %>%
+  group_by(expanded_clone,phenotype) %>%
+  dplyr::count() %>%
+  dplyr::rename("total_cells" = n)
+tcr_db_gex = tcr_db_gex %>% left_join(totals,by=c("phenotype","expanded_clone"))
 
-p1=ggplot(tcr_db_gex,aes(n,antigen.species,fill=expanded_clone))+geom_col(color="black",position=position_dodge())
-p2=ggplot(tcr_db_gex,aes(n/total_cells,antigen.species,fill=expanded_clone))+geom_col(color="black",position=position_dodge())
 
-png("pathogen_tcrs_by_expanded_just_ms.png",res=300,units="in",height=6,width=12)
-grid.arrange(p1,p2,nrow=1)
+p=ggplot(tcr_db_gex,
+  aes(n/total_cells * 100,antigen.species,fill=expanded_clone))+
+  geom_col(position=position_dodge(),color="black")+
+  labs(x = "% of T cells",y="Antigen-specificity",fill="Expanded clone?")+
+  theme_minimal()+
+  facet_wrap(~phenotype,nrow=1)
+
+png("expanded_cells_pathogen_tcrs.png",res=300,units="in",height=4,width=6)
+p
 dev.off()
 
-# repeat for clonal vs nonclonal in controls
-# whole dataset
-tcr_db_gex = t_cells@meta.data %>% filter(phenotype=="NIND") %>%
+p=ggplot(tcr_db_gex %>% filter(antigen.species == "EBV"),
+  aes(phenotype,n/total_cells * 100,fill=expanded_clone))+
+  geom_col(position=position_dodge(),color="black")+
+  labs(y = "% of T cells", x="Antigen-specificity",fill="Expanded clone?")+
+  theme_minimal()
+
+png("ebv_expanded_cells_pathogen_tcrs.png",res=300,units="in",height=4,width=6)
+p
+dev.off()
+
+# individual level
+tcr_db_gex = t_cells@meta.data %>%
 left_join(
 vdj_db %>% dplyr::rename("junction_aa_VDJ" = cdr3),
 by = c("junction_aa_VDJ")) %>%
 filter(gene=="TRB") %>%
 filter(!is.na(antigen.epitope)) %>%
-dplyr::count(antigen.species,expanded_clone)
+dplyr::count(donor.id,antigen.species,expanded_clone,phenotype)
 
-totals = t_cells@meta.data %>% group_by(expanded_clone) %>% dplyr::count() %>% dplyr::rename("total_cells" = n)
-tcr_db_gex = tcr_db_gex %>% left_join(totals,by="expanded_clone")
+totals = t_cells@meta.data %>%
+  group_by(donor.id,expanded_clone,phenotype) %>%
+  dplyr::count() %>%
+  dplyr::rename("total_cells" = n)
+tcr_db_gex = tcr_db_gex %>% left_join(totals,by=c("donor.id","phenotype","expanded_clone"))
 
-p1=ggplot(tcr_db_gex,aes(n,antigen.species,fill=expanded_clone))+geom_col(color="black",position=position_dodge())
-p2=ggplot(tcr_db_gex,aes(n/total_cells,antigen.species,fill=expanded_clone))+geom_col(color="black",position=position_dodge())
+p=ggplot(tcr_db_gex %>% filter(antigen.species == "EBV"),
+  aes(phenotype,n/total_cells * 100,fill=expanded_clone))+
+  geom_boxplot(position=position_dodge(),color="black")+
+  labs(y = "% of T cells", x="Phenotype",fill="Expanded clone?")+
+  theme_minimal()+
+  ggtitle("EBV-specific TCRs")
 
-png("pathogen_tcrs_by_expanded_just_control.png",res=300,units="in",height=6,width=12)
-grid.arrange(p1,p2,nrow=1)
+png("ebv_expanded_cells_pathogen_tcrs.png",res=300,units="in",height=3,width=4)
+p
 dev.off()
 
-# by source
-tcr_db_gex = t_cells@meta.data %>% left_join(
+# repeat by source
+tcr_db_gex = t_cells@meta.data %>%
+left_join(
 vdj_db %>% dplyr::rename("junction_aa_VDJ" = cdr3),
 by = c("junction_aa_VDJ")) %>%
 filter(gene=="TRB") %>%
-filter(!is.na(antigen.epitope))
+filter(!is.na(antigen.epitope)) %>%
+dplyr::count(donor.id,antigen.species,expanded_clone,phenotype,source)
 
-ebv_counts = tcr_db_gex %>% filter(antigen.species=="EBV") %>% dplyr::count(source,phenotype,donor.id,cell_type)
+totals = t_cells@meta.data %>%
+  group_by(donor.id,expanded_clone,phenotype,source) %>%
+  dplyr::count() %>%
+  dplyr::rename("total_cells" = n)
+tcr_db_gex = tcr_db_gex %>% left_join(totals,by=c("donor.id","phenotype","expanded_clone","source"))
+
+p=ggplot(tcr_db_gex %>% filter(antigen.species == "EBV"),
+  aes(phenotype,n/total_cells * 100,fill=expanded_clone))+
+  geom_boxplot(position=position_dodge(),color="black")+
+  labs(y = "% of T cells", x="Phenotype",fill="Expanded clone?")+
+  theme_minimal()+
+  facet_wrap(~source)+
+  ggtitle("EBV-specific TCRs")
+
+png("ebv_expanded_cells_pathogen_tcrs_source.png",res=300,units="in",height=3,width=6)
+p
+dev.off()
+
 
 # permutation
 # whole dataset
 
-
-bootstrap_ebv_enrichment = function(pheno1 = "NIND",
+pvals = list()
+bootstrap_ebv_enrichment = function(pheno1 = "MS",
 clonal1 =  "Expanded",
-pheno2 = "NIND",
+pheno2 = "MS",
 clonal2 = "Not expanded")
 {
+  # filter reference group
   reference_data = t_cells@meta.data %>%
   filter(phenotype==pheno1 & expanded_clone==clonal1)
   n_cells = reference_data %>% nrow
 
+  # find EBV+ cells in reference
   reference_data = reference_data %>%
   left_join(
   vdj_db %>% dplyr::rename("junction_aa_VDJ" = cdr3),
@@ -1380,15 +1760,16 @@ clonal2 = "Not expanded")
   filter(gene=="TRB") %>%
   filter(!is.na(antigen.epitope)) %>%
   dplyr::count(antigen.species=="EBV")
-
   n_ebv_cells_ref = reference_data[2,2]
 
   message(n_ebv_cells_ref, " EBV+ cells ")
   message(n_cells, " total cells ")
 
   results = list()
-  for(i in c(1:1000)){
+  for(i in c(1:100)){
   message("iteration ",i)
+
+  # sample equivalent size dataset from non-reference
   test_data = t_cells@meta.data %>%
   filter(phenotype==pheno2 & expanded_clone==clonal2) %>%
   sample_n(size = n_cells,replace=FALSE)
@@ -1409,8 +1790,9 @@ clonal2 = "Not expanded")
   }
   }
   results = unlist(results)
-  pval = sum(results>n_ebv_cells_ref)/1000
+  pval = sum(results>n_ebv_cells_ref)/100
   message(pval)
+  pvals[[length(pvals)+1]] = pval
 }
 
 bootstrap_ebv_enrichment(pheno1 = "NIND",clonal1 =  "Expanded",pheno2 = "NIND",clonal2 = "Not expanded")
@@ -1419,6 +1801,3 @@ bootstrap_ebv_enrichment(pheno1 = "OIND",clonal1 =  "Expanded",pheno2 = "OIND",c
 
 
 # combine with bcr data
-
-
-

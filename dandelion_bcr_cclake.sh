@@ -10,7 +10,7 @@
 
 #! sbatch directives begin here ###############################
 #! Name of the job:
-#SBATCH -J de_da
+#SBATCH -J dandelion_bcr
 #! Which project should be charged:
 #SBATCH -A SAWCER-SL3-CPU
 #! How many whole nodes should be allocated?
@@ -26,9 +26,10 @@
 #! interrupted by node failure or system downtime):
 #SBATCH --no-requeue
 
+
 #! For 6GB per CPU, set "-p skylake"; for 12GB per CPU, set "-p skylake-himem":
-#SBATCH -p cclake-himem
-#SBATCH --cpus-per-task=32
+#SBATCH -p cclake
+#SBATCH --cpus-per-task=4
 
 #! sbatch directives end here (put any additional directives above this line)
 
@@ -51,8 +52,14 @@ module load R/4.0.3
 
 #! Insert additional module load commands after this line if needed:
 
-cd /rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/scripts/joint_eu_cam/
-Rscript de_da_tests_2112.R
+
+
+echo "Running singularity dandelion for BCRs"
+cd /rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/dandelion_inputs/BCR/
+singularity run -B $PWD ~/sc-dandelion_latest.sif dandelion-preprocess --meta meta_file.csv
+
+
+
 
 #! Work directory (i.e. where the job will run):
 workdir="$SLURM_SUBMIT_DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory

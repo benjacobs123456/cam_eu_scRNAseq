@@ -10,10 +10,10 @@ library(SingleR)
 library(gridExtra)
 
 # set WD
-setwd("/rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/datasets/")
+setwd("/home/hpcjaco1/rds/hpc-work/Cambridge_EU_combined/datasets")
 
 # read in outputs from deconvolution & integration step
-all_combo = readRDS("all_combo_with_UMAP_PCs_50resolution2.5.rds")
+all_combo = readRDS("all_combo_with_UMAP_PCs_50resolution1.5.rds")
 
 # clean and integrated phenotype data
 reference = read_tsv("/rds/project/sjs1016/rds-sjs1016-msgen/10X_5prime/EU_ID.txt")
@@ -23,6 +23,7 @@ reference_cam = read_tsv("/rds/project/sjs1016/rds-sjs1016-msgen/10X_5prime/GT_I
 reference_cam$cohort = "Cam"
 reference_cam$PBMC_PoolSize = as.character(reference_cam$PBMC_PoolSize)
 reference = bind_rows(reference,reference_cam)
+
 
 # sort out long cambridge IDs
 new_ids = lapply(all_combo@meta.data$donor.id, function(x){
@@ -59,10 +60,26 @@ cam_pheno$shortID = unlist(lapply(cam_pheno$ID, function(x){
   new_id = str_remove(pattern="v2",new_id)
   return(new_id)
 }))
-cam_pheno = cam_pheno %>% select(shortID,Category)
-eu_pheno = read_csv("/rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/references/EU_pheno.csv")
+cam_pheno =  cam_pheno %>%
+select(shortID,Category,Age,Gender,Category_fine,Oligoclonal) %>%
+rename("Sex"= Gender) %>%
+mutate(Sex = case_when(
+  Sex == "2" ~ "F",
+  Sex == "1" ~ "M"
+))
+
+eu_pheno = read_csv("/rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/references/EU_pheno.csv") %>%
+mutate(Sex = case_when(
+  Sex == "female" ~ "F",
+  Sex == "male" ~ "M"
+))
 pheno = bind_rows(cam_pheno,eu_pheno)
 pheno$donor.id = pheno$shortID
+
+# add in TUM pheno data
+tum_pheno = read_csv("/rds/user/hpcjaco1/hpc-work/TUM data/data_featherstone/christiane/SC/transfer_CAM/TUM_part1/phenotypes_all.csv")
+
+# FINISH 18-12
 
 # merge with metadata
 donor_phenotypes = lapply(all_combo@meta.data$donor.id,function(x){
@@ -74,11 +91,15 @@ donor_phenotypes = lapply(all_combo@meta.data$donor.id,function(x){
 all_combo[['phenotype']] = donor_phenotypes
 
 # remove singletons
-cluster_counts = all_combo@meta.data %>% group_by(seurat_clusters) %>% dplyr::count() %>% arrange(as.numeric(as.character(seurat_clusters)))
+cluster_counts = all_combo@meta.data %>%
+  group_by(seurat_clusters) %>%
+  dplyr::count() %>%
+  arrange(desc(n))
+
 write_csv(cluster_counts,"raw_cluster_counts.csv")
 all_combo = subset(all_combo, subset = seurat_clusters != "singleton")
 
-# remove clusters with n<5 cells (1 clusters, 2 cells)
+# remove clusters with n<5 cells
 high_count_clusters = cluster_counts %>% filter(n>5)
 all_combo = subset(all_combo, subset = seurat_clusters %in% high_count_clusters$seurat_clusters)
 

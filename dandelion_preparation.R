@@ -1,8 +1,10 @@
+# load libraries
 library(readr)
 library(dplyr)
 library(stringr)
 library(tidyr)
 
+# get command line args (BCR vs TCR)
 args = commandArgs(trailingOnly = TRUE)
 print(args)
 if(!args[1] %in% c("BCR","TCR")){
@@ -16,10 +18,9 @@ name_of_vdj = if(args[1]=="BCR"){
 }
 
 # set WD
-setwd("/rds-d4/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/")
+setwd("/rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/")
 
-
-# link file
+# read in link file
 reference = read_tsv("/rds/project/sjs1016/rds-sjs1016-msgen/10X_5prime/EU_ID.txt")
 reference$cohort = "EU"
 reference$PBMC_PoolSize = as.character(reference$PBMC_PoolSize)
@@ -41,20 +42,26 @@ eu_csf_samples = list.files("/home/hpcjaco1/rds/rds-sjs1016-msgen/10X_5prime/CRv
 eu_csf_samples = eu_csf_samples[eu_csf_samples %in% good_csf_batches]
 cam_csf_samples = list.files("/home/hpcjaco1/rds/rds-sjs1016-msgen/10X_5prime/CRv5_output/CSF/")
 cam_csf_samples = cam_csf_samples[cam_csf_samples %in% good_csf_batches]
-
 unpooled_csf_samples = reference[reference$CSF_PoolSize==1,]
 unpooled_pbmc_samples = reference[reference$PBMC_PoolSize==1,]
 
 batches_without_decon = list()
-outdir = paste0("/rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/dandelion_inputs/",args[1],"/")
 
+# set out directory
+outdir = paste0("/rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/dandelion_inputs/",args[1],"/")
+
+# define processing function
 process_vdj_data = function(source, cohort){
+
+# error checking
 if(!source %in% c("CSF","PBMC")){
   stop("Source must be one of CSF or PBMC")
 }
 if(!cohort %in% c("EU","Cam")){
   stop("Source must be one of CSF or PBMC")
 }
+
+# set wd
 wd = if(cohort == "Cam"){
     message("Looking in Cambridge folders")
     paste0("/rds-d4/project/sjs1016/rds-sjs1016-msgen/10X_5prime/CRv5_output/",source)
@@ -63,10 +70,11 @@ wd = if(cohort == "Cam"){
     paste0("/rds-d4/project/sjs1016/rds-sjs1016-msgen/10X_5prime/CRv5_EU/")
   } # set the working directory
 setwd(wd)
+
+# get folders
 folders = list.dirs(recursive=FALSE, full.names = FALSE)
 
 # filter folders to correct folders given source and cohort
-
 folders = if(cohort == "Cam" & source == "CSF"){
   folders[folders %in% cam_csf_samples]
 } else if(cohort == "Cam" & source == "PBMC"){
@@ -174,7 +182,7 @@ for (i in 1:length(folders)){
               contig_df = contig_df %>% filter(new_names %in% this_donor$barcode)
 
               # get back into fasta format
-              contig_df = contig_df %>% select(-new_names)
+              contig_df = contig_df %>% dplyr::select(-new_names)
 
               filtered_contig_list = list()
               for(l in 1:nrow(contig_df)){
@@ -185,10 +193,10 @@ for (i in 1:length(folders)){
               new_fasta = data.frame(unlist(filtered_contig_list))
 
               # go back to old cols
-              this_donor = this_donor %>% select(colnames(contigs))
+              this_donor = this_donor %>% dplyr::select(colnames(contigs))
 
               # check that this donor has enough contigs
-              if(nrow(this_donor)<5){
+              if(nrow(this_donor)<2){
                 message("Skipping - insufficient B/T cell contigs")
               } else {
                 # write to file
@@ -223,13 +231,3 @@ sources = c("PBMC","CSF")
 cohorts = c("EU","Cam")
 mat = expand.grid(sources,cohorts)
 mapply(process_vdj_data,mat[,1],mat[,2])
-
-samples = list.dirs(outdir,recursive=FALSE, full.names = FALSE)
-meta_file = data.frame(samples)
-meta_file = meta_file %>% mutate(new_sample_id = samples)
-meta_file = meta_file %>% cbind(data.frame(str_split_fixed(meta_file$new_sample_id,pattern="_",n=2))) %>%
-select(-new_sample_id, - X1) %>%
-rename("sample" = samples, "individual" = X2)
-write_csv(meta_file,paste0(outdir,"/meta_file.csv"))
-message("Printing batches without decon:")
-print(unlist(batches_without_decon))
