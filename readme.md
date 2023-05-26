@@ -6,10 +6,9 @@
 
 # Deconvolution and basic qc
 ````unix
-Rscript gex_deconvolution_qc_step1.R
+sbatch gex_deconvolution_qc_step1.sh
 ````
-
-This script performs the following QC steps on each batch of GEX data
+This script runs `Rscript gex_deconvolution_qc.R` which performs the following QC steps on each batch of GEX data
 - Filtering by RNA count & MT%
 - Ambient RNA correction with SoupX
 - Doublet identification
@@ -19,20 +18,20 @@ This script performs the following QC steps on each batch of GEX data
 ````unix
 sbatch integration_icelake.sh
 ````
-This script integrates data across batches using Harmony.
+This script runs `Rscript integration.R` which integrates the post-qc datasets using Harmony.
 
 # UMAP
 ````unix
 sbatch umap_icelake.sh
 ````
-This script runs UMAP and Louvain clustering across a range of paramaters.
+This script runs  `Rscript umap.R` which performs UMAP and Louvain clustering across a range of parameters.
 
 # Cluster biomarkers
 ````unix
-Rscript find_cluster_biomarkers.R
+Rscript cluster_biomarkers_icelake.sh
 ````
 
-This script does the following
+This script runs `Rscript find_cluster_biomarkers_and_update_pheno.R` which does the following
 - Cleans phenotypes
 - Makes some plots exploring clustering  
 - Compares annotations of cell types across different methods (SingleR, Azimuth, Celltypist)
@@ -42,36 +41,54 @@ This script does the following
 ````unix
 sbatch celltypist.sh
 ````
+- Which runs celltypist in each cluster
 
 # Update cluster IDs
 `````unix
 sbatch update_clusters.sh
 ````
-
+- Which runs `Rscript update_cluster_labels.R` to update cluster IDs
 
 # DE & DA
 To run DE and DA using the broad clusters:
 ````unix
 sbatch de_icelake.sh
 ````
+- Runs DE tests with `Rscript de_summary_plots.R`
+- Summary plots then made with `Rscript  de_da_tests_phenotypes.R`
+
 
 # GSEA
 Then to run GSEA on the broad clusters with those DE results:
 ````unix
-Rscript gsea.R
+sbatch gsea.sh
 ````
+
+# Pathway analysis
+````unix
+sbatch pathway_analysis.sh
+````
+
+# Cell-cell communication
+````unix
+sbatch ccc_per_sample.sh
+````
+- Which runs LIANA on a per-sample basis
+- `Rscript Rscript ccc_overall.R` then combines and explores these results
+
+
 
 # Prepare for Immcantation/Dandelion
 These scripts prepare the VDJ data for QC with dandelion
 ````unix
-Rscript dandelion_preparation.R TCR
-Rscript dandelion_preparation.R BCR
-Rscript dandelion_preparation2.R TCR
-Rscript dandelion_preparation2.R BCR
+Rscript dandelion_preparation.R TCR 
+Rscript dandelion_preparation.R BCR 
+Rscript dandelion_preparation2.R TCR 
+Rscript dandelion_preparation2.R BCR 
 Rscript make_dandelion_metafile.R
 ````
 
-And then to run dandelion:
+And then to run dandelion pre-processing:
 ````unix
 sbatch dandelion_bcr.sh
 sbatch dandelion_tcr.sh
@@ -86,8 +103,8 @@ sbatch dandelion_filtering.sh
 
 # Analyse VDJ data
 ````unix
-Rscript bcr_analysis_28_06_22.R
-Rscript tcr_clonality_exploration.R
+Rscript bcr_analysis.R
+Rscript tcr_analysis.R
 ````
 
 # eQTL analysis
@@ -110,3 +127,4 @@ Rscript eqtl_coloc_plots.R
 
 Rscript eqtl_cell_type_specific.R
 ````
+

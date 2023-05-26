@@ -58,9 +58,6 @@ DefaultAssay(all_combo)="RNA"
 # stash new names
 all_combo[['cell_type']] = Idents(all_combo)
 
-# remove platelets
-all_combo = subset(all_combo,subset = cell_type != "Platelets")
-
 # big picture numbers
 message("Cell numbers")
 tbl0 = all_combo@meta.data %>%
@@ -83,63 +80,15 @@ metadata_for_tum_dandelion = all_combo@meta.data %>%
 
 write_csv(metadata_for_tum_dandelion,"/rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/datasets/metadata_for_tum_dandelion.csv")
 
+# remove platelets
+all_combo = subset(all_combo,subset = cell_type != "Platelets")
+
 #######################################
-# Merge overlapping patients
+# Look at but then exclude tysabri donor PBMC
 #######################################
 
-sample_overlap = read_csv("/rds/user/hpcjaco1/hpc-work/TUM data/data_featherstone/christiane/SC/transfer_CAM/TUM_part1/Sample_Overlap.csv")
-
-# save replicates
-replicates = subset(all_combo, iid %in% sample_overlap$TUM_PatID | iid %in% sample_overlap$CAM_SAMPLE_ID)
-
-# examine replicates
-for(i in c(1:nrow(sample_overlap))){
-  this_source = "CSF"
-  dat_to_plot = subset(replicates, iid == sample_overlap$TUM_PatID[i] | iid == sample_overlap$CAM_SAMPLE_ID[i] & source == this_source)
-  p = DimPlot(dat_to_plot,split.by="processing_site",group.by="cell_type_crude")+NoLegend() +theme_umap()
-  plot_fx(paste0("subject_",i,"replicate_csf.png"),p)
-}
-
-# look at major batch effects
-p = DimPlot(subset(all_combo, source=="CSF" & Category == "MS"),split.by="processing_site",group.by="cell_type_crude")+NoLegend() +theme_umap()
-plot_fx("batch_effects_umap_csf_ms.png",p)
-
-
-# write demographics file
-
-pheno_simple = all_combo@meta.data %>%
-  distinct(iid,source,.keep_all=T) %>%
-  dplyr::select(iid,Age,Sex,Category,OCB,processing_site,source)
-rownames(pheno_simple) = NULL
-
-pheno_simple = pheno_simple %>%
-tidyr::pivot_wider(values_from = source,
-names_from = source,
-id_cols = 1:6) %>%
-mutate(CSF = ifelse(!is.na(CSF),"Yes","No")) %>%
-mutate(PBMC = ifelse(!is.na(PBMC),"Yes","No")) %>%
-arrange(Category,processing_site) %>%
-mutate(replicate = ifelse(iid %in% sample_overlap$CAM_SAMPLE_ID | iid %in% sample_overlap$TUM_PatID,"*",""))
-write_csv(pheno_simple,"demographics.csv")
-
-all_combo@meta.data = all_combo@meta.data %>%
-  left_join(
-    sample_overlap %>%
-      dplyr::rename("iid" = TUM_PatID),
-    by="iid"
-  ) %>%
-  mutate(iid_prior_to_merging_duplicates = iid) %>%
-  mutate(iid = ifelse(iid %in% sample_overlap$TUM_PatID,CAM_SAMPLE_ID,iid))
-rownames(all_combo@meta.data) = colnames(all_combo)
-
-
-
-message("Donor n after duplicates merged")
-tbl1 = all_combo@meta.data %>%
-  distinct(iid,source,.keep_all=T) %>%
-  dplyr::count(Category,source,processing_site)
-tbl1
-write_csv(tbl1,"donor_counts_no_duplicates.csv")
+tysabri_donor = subset(all_combo, iid == "TU146")
+all_combo = subset(all_combo, iid != "TU146")
 
 #######################################
 # Diff abundance with edgeR
@@ -195,8 +144,10 @@ fit <- glmQLFit(y.ab, design, robust=TRUE, abundance.trend=FALSE)
 contrast =  makeContrasts(
   MS_CSF - MS_PBMC,
   OIND_CSF - OIND_PBMC,
+  OINDI_CSF - OINDI_PBMC,
   Control_CSF - Control_PBMC,
   MS_CSF - OIND_CSF,
+  MS_CSF - OINDI_CSF,
   MS_CSF - Control_CSF,
   OIND_CSF - Control_CSF,
   MS_PBMC - OIND_PBMC,
@@ -295,8 +246,10 @@ fit <- glmQLFit(y.ab, design, robust=TRUE, abundance.trend=FALSE)
 contrast =  makeContrasts(
   MS_CSF - MS_PBMC,
   OIND_CSF - OIND_PBMC,
+  OINDI_CSF - OINDI_PBMC,
   Control_CSF - Control_PBMC,
   MS_CSF - OIND_CSF,
+  MS_CSF - OINDI_CSF,
   MS_CSF - Control_CSF,
   OIND_CSF - Control_CSF,
   MS_PBMC - OIND_PBMC,
@@ -389,7 +342,7 @@ distinct(donor_source,.keep_all=TRUE)
 abundances = table(all_combo@meta.data$cell_type,all_combo@meta.data$donor_source)
 
 # filter out clusters with 0 counts
-abundances = abundances[rowSums(abundances)>0,]
+abundances = abundances[rowSums(abundances)>10,]
 
 sample_info = sample_info %>% filter(donor_source %in% colnames(abundances))
 sample_info = sample_info[match(colnames(abundances),sample_info$donor_source),]
@@ -425,10 +378,13 @@ fit <- glmQLFit(y.ab, design, robust=TRUE, abundance.trend=FALSE)
 
 contrast =  makeContrasts(
   MS_CSF - OIND_CSF,
+  MS_CSF - OINDI_CSF,
   MS_CSF - Control_CSF,
   OIND_CSF - Control_CSF,
+  OINDI_CSF - Control_CSF,
   MS_PBMC - OIND_PBMC,
   MS_PBMC - Control_PBMC,
+  MS_PBMC - OINDI_PBMC,
   OIND_PBMC - Control_PBMC,
   levels = design
 )
@@ -482,16 +438,30 @@ for(i in 1:length(colnames(contrast))){
   png(paste0("./da_plots/crude_labels_da_plot_",contrast_name,"_.png"),res=300,units="in",height=3,width=3)
   print(plot)
   dev.off()
+  res_df = res %>% mutate(contrast = contrast_name,cell_type = cell)
+  da_overall_list[[length(da_overall_list)+1]] = res_df
 }
+
+da_overall_list = do.call("bind_rows",da_overall_list)
+rownames(da_overall_list) = NULL
+da_overall_list = da_overall_list %>%
+  mutate(P_adj = p.adjust(PValue,method="fdr")) %>%
+  dplyr::select(contrast, cell, logFC, PValue, P_adj)
+write_csv(da_overall_list,"./da_plots/all_da_results.csv")
 
 
 # NB repeat for CSF vs PBMC - different scales
 contrast =  makeContrasts(
   MS_CSF - MS_PBMC,
   OIND_CSF - OIND_PBMC,
+  OINDI_CSF - OINDI_PBMC,
   Control_CSF - Control_PBMC,
   levels = design
 )
+da_overall_list = list()
+
+
+
 
 da_plots = list()
 # do da tests
@@ -523,20 +493,85 @@ for(i in 1:length(colnames(contrast))){
   geom_vline(xintercept = 0,alpha=0.2)+
   NoLegend()+
   ggtitle(comparison_label)+
-  scale_y_continuous(limits=c(0,40))+
-  scale_x_continuous(limits=c(-6,6))+
+  scale_y_continuous(limits=c(0,100))+
+  scale_x_continuous(limits=c(-10,10))+
   geom_point(shape=16,size=3)
 
 
   png(paste0("./da_plots/crude_labels_da_plot_",contrast_name,"_.png"),res=300,units="in",height=3,width=3)
   print(plot)
   dev.off()
+  res_df = res %>% mutate(contrast = contrast_name,cell_type = cell)
+  da_overall_list[[length(da_overall_list)+1]] = res_df
 }
+
+da_overall_list = do.call("bind_rows",da_overall_list)
+
+rownames(da_overall_list) = NULL
+da_overall_list = da_overall_list %>%
+  mutate(P_adj = p.adjust(PValue,method="fdr")) %>%
+  dplyr::select(contrast, cell, logFC, PValue, P_adj)
+write_csv(da_overall_list,"./da_plots/all_da_results_csf_v_pbmc.csv")
+
+# plot differences
+da_overall_list$cell = factor(da_overall_list$cell,ordered=TRUE,levels = c("B cells",
+"Plasma cells",
+"mDCs",
+"HSPCs",
+"CD14 Mono",
+"CD16 Mono",
+"Macrophages",
+"CD4 T cells",
+"CD8 T cells",
+"Tregs",
+"MAIT cells",
+"NK cells",
+"pDCs"
+))
+
+da_overall_list = da_overall_list %>%
+tidyr::separate(contrast,"_",into=c("pheno","other")) %>%
+  tidyr::pivot_wider(id_cols = cell,
+    names_from = pheno,
+    values_from = c(logFC,PValue))
+
+
+make_comparison_plot = function(pheno1,pheno2){
+plot_dat = da_overall_list
+plot_dat = plot_dat %>% dplyr::select(1,contains(pheno1),contains(pheno2))
+col_name1 = paste0("PValue_",pheno1)
+col_name2 = paste0("logFC_",pheno1)
+col_name3 = paste0("PValue_",pheno2)
+col_name4 = paste0("logFC_",pheno2)
+
+plot_dat = plot_dat %>%
+  mutate(specific = ifelse(.data[[col_name1]] < 0.05/nrow(plot_dat) & .data[[col_name3]] > 0.05, "yes","no"))
+
+p = ggplot(plot_dat,
+aes(.data[[col_name4]],.data[[col_name2]],colour=specific, label = cell))+
+geom_point()+
+geom_abline(linetype="dashed",slope=1,intercept=0)+
+theme_minimal()+
+geom_vline(xintercept=0,alpha=0.5)+
+geom_hline(yintercept=0,alpha=0.5)+
+scale_color_manual(values = c("yes" = "red", "no" = "grey"))+
+geom_text_repel(show.legend=F)+
+ggtitle(paste0(pheno1," vs ",pheno2))
+
+outfile = paste0("diff_da_",pheno1,"_",pheno2,".png")
+png(outfile,res=600,units="in",width=6,height=6)
+print(p)
+dev.off()
+}
+make_comparison_plot("MS","Control")
+make_comparison_plot("OIND","Control")
+make_comparison_plot("OINDI","Control")
+
 
 
 
 # reorder phenotypes
-all_combo@meta.data$phenotype = factor(all_combo@meta.data$phenotype,levels=c("NIND","OIND","MS"),ordered=TRUE)
+all_combo@meta.data$phenotype = factor(all_combo@meta.data$phenotype,levels=c("NIND","OIND","OINDI","MS"),ordered=TRUE)
 
 counts = all_combo@meta.data %>% group_by(cell_type,iid,phenotype,source) %>% dplyr::count() %>% arrange(cell_type,source)
 cell_medians = counts %>% group_by(phenotype,source,cell_type) %>% summarise(median = median(n),max = max(n))
@@ -581,27 +616,6 @@ png("./da_plots/crude_labels_absolute_cell_counts_barplot.png",res=300,width=7,h
 ggplot(all_combo@meta.data,aes(phenotype,fill=cell_type))+geom_bar()+facet_wrap(~source)+scale_fill_brewer(palette="Set3")+theme_classic()+labs(x="Phenotype",y="Absolute cell count",fill="Cell type")
 dev.off()
 
-
-##############################
-###    Compare celltypist
-##############################
-lowres_celltypes = all_combo@meta.data %>% dplyr::count(ann_celltypist_lowres) %>% filter(n>50)
-highres_celltypes = all_combo@meta.data %>% dplyr::count(ann_celltypist_highres) %>% filter(n>50)
-
-png("celltypist_anno_lowres.png",res=300,units="in",height=6,width=8)
-ggplot(all_combo@meta.data %>% filter(ann_celltypist_lowres %in% lowres_celltypes$ann_celltypist_lowres),
-aes(cell_type,fill=ann_celltypist_lowres))+
-geom_bar(position="fill",color="black")+
-theme_bw()+
-scale_fill_brewer(palette="Paired")
-dev.off()
-
-png("celltypist_anno.png",res=300,units="in",height=6,width=12)
-ggplot(all_combo@meta.data %>% filter(ann_celltypist_highres %in% highres_celltypes$ann_celltypist_highres),
-aes(cell_type,fill=ann_celltypist_highres))+
-geom_bar(position="fill",color="black")+
-theme_bw()
-dev.off()
 
 
 ######################################
@@ -660,7 +674,13 @@ dplyr::count(cell_type) %>%
 mutate(plasma_cell_prop = n/sum(n)) %>%
 filter(cell_type == "Plasma cells") %>%
 dplyr::select(iid,plasma_cell_prop,OCB)
-
+pc_pcts %>%
+  mutate(plasma_cell_prop = plasma_cell_prop * 100) %>%
+  ungroup %>%
+  summarise(median(plasma_cell_prop),IQR(plasma_cell_prop),
+  min(plasma_cell_prop),
+  max(plasma_cell_prop)
+  )
 p1=ggplot(pc_pcts,aes(OCB,plasma_cell_prop))+
 geom_boxplot()+
 theme_minimal()+
@@ -668,12 +688,11 @@ labs(y="Plasma cell proportion",x="CSF oligoclonal bands")
 
 # define RMS v PMS
 all_combo@meta.data = all_combo@meta.data %>%
-mutate(Category_fine = case_when(
-  Category != "MS" ~ "Not_MS",
-  Category == "MS" & is.na(Category_fine) & processing_site=="TUM" & iid == "TUM_SC_19" ~ "PMS",
-  Category == "MS" & is.na(Category_fine) & processing_site=="TUM" & iid != "TUM_SC_19" ~ "RMS",
-  Category == "MS" & !is.na(Category_fine) ~ Category_fine,
-))
+mutate(ms_subtype = case_when(
+  !is.na(ms_subtype) ~ ms_subtype,
+  is.na(ms_subtype) & phenotype=="MS" & cohort=="EU" & iid != "TUM_SC_19" ~ "RMS",
+  iid == "TUM_SC_19" ~ "PPMS"
+  ))
 plot_dat = all_combo@meta.data %>%
 filter(Category=="MS")
 
@@ -685,13 +704,14 @@ plot_dat = plot_dat %>% filter(iid %in% counts$iid)
 
 pc_pcts = plot_dat %>%
 filter(source=="CSF") %>%
-group_by(iid,Category_fine) %>%
+filter(!is.na(ms_subtype)) %>%
+group_by(iid,ms_subtype) %>%
 dplyr::count(cell_type) %>%
 mutate(plasma_cell_prop = n/sum(n)) %>%
 filter(cell_type == "Plasma cells") %>%
-dplyr::select(iid,plasma_cell_prop,Category_fine)
+dplyr::select(iid,plasma_cell_prop,ms_subtype)
 
-p2=ggplot(pc_pcts,aes(Category_fine,plasma_cell_prop))+
+p2=ggplot(pc_pcts,aes(ms_subtype,plasma_cell_prop))+
 geom_boxplot()+
 theme_minimal()+
 labs(y="Plasma cell proportion",x="MS subtype")
@@ -803,7 +823,7 @@ do_da = function(x, contrasts_to_test){
 }
 
 # run DA
-do_da(x = "Category_fine",
+do_da(x = "ms_subtype",
 contrasts_to_test = c("RMS_CSF - PPMS_CSF","RMS_PBMC - PPMS_PBMC"))
 do_da(x = "OCB",
 contrasts_to_test = c("TRUE_CSF - FALSE_CSF","TRUE_PBMC - FALSE_PBMC"))
@@ -822,7 +842,7 @@ dplyr::count(.data[[x]]) %>%
 mutate(prop = n/sum(n))
 }
 count_pheno("OCB")
-count_pheno("Category_fine")
+count_pheno("ms_subtype")
 
 # individual dim plots
 p=DimPlot(subset(all_combo,Category=="MS" & source=="CSF"),split.by="iid",ncol=9)+
@@ -876,6 +896,7 @@ aggregated_counts = aggregated_counts[!rownames(aggregated_counts) %in% low_coun
 # get names for clusters
 clusters = levels(factor(all_combo@meta.data$cell_type))
 clusters = clusters[!clusters %in% c("HSPCs","Macrophages")]
+table(factor(all_combo@meta.data$cell_type))
 
 # split by cluster
 filtered_matrices = lapply(clusters,function(x){
@@ -901,6 +922,10 @@ de_results = lapply(clusters,function(cell_type){
         "OIND_CSF"
       } else if(grepl("OIND_PBMC",y)){
         "OIND_PBMC"
+      } else if(grepl("OINDI_PBMC",y)){
+        "OINDI_PBMC"
+      } else if(grepl("OINDI_CSF",y)){
+        "OINDI_CSF"
       }
     }) %>% unlist %>% factor()
 
@@ -924,21 +949,23 @@ de_results = lapply(clusters,function(cell_type){
       design = design,
       group = group_vector,
       min.count = 10,
-      min.total.count = 15,
-      large.n = 10,
-      min.prop = 0.7)
+      min.total.count = 500,
+      large.n = 100,
+      min.prop = 0.9)
     y = y[keep, , keep.lib.sizes=FALSE]
     y = calcNormFactors(y)
     y = estimateDisp(y,design,robust=TRUE)
     fit = glmQLFit(y, design, robust=TRUE)
 
     # define contrast for testing
-
-    contrast =  if(length((unique(y$samples$group)))==6){
-      makeContrasts(
+    contrast = if(ncol(design)==10){
+    makeContrasts(
         MS_CSF - MS_PBMC,
         OIND_CSF - OIND_PBMC,
         Control_CSF - Control_PBMC,
+        MS_CSF - OINDI_CSF,
+        OINDI_CSF - OINDI_PBMC,
+        MS_PBMC - OINDI_PBMC,
         MS_CSF - OIND_CSF,
         MS_CSF - Control_CSF,
         OIND_CSF - Control_CSF,
@@ -946,50 +973,66 @@ de_results = lapply(clusters,function(cell_type){
         MS_PBMC - Control_PBMC,
         OIND_PBMC - Control_PBMC,
         levels = design
-      )
-    } else if(length((unique(y$samples$group)))==5 & (!("Control_CSF" %in% unique(y$samples$group)))){
+      )} else if(
+        ncol(design)!=10 &
+        (!("Control_PBMC" %in% colnames(design)) |
+        !("Control_CSF" %in% colnames(design)) ) &
+        "OINDI_CSF" %in% colnames(design) & "OIND_PBMC" %in% colnames(design) & ("OIND_CSF" %in% colnames(design)))
+      {
       makeContrasts(
-        MS_CSF - MS_PBMC,
-        OIND_CSF - OIND_PBMC,
-        MS_CSF - OIND_CSF,
-        MS_PBMC - OIND_PBMC,
-        MS_PBMC - Control_PBMC,
-        OIND_PBMC - Control_PBMC,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==4 & !("Control_PBMC" %in% unique(y$samples$group)) & !("Control_CSF" %in% unique(y$samples$group))){
+      MS_CSF - MS_PBMC,
+      OIND_CSF - OIND_PBMC,
+      MS_CSF - OINDI_CSF,
+      OINDI_CSF - OINDI_PBMC,
+      MS_PBMC - OINDI_PBMC,
+      MS_CSF - OIND_CSF,
+      MS_PBMC - OIND_PBMC,
+      levels = design
+      )} else if(
+        ncol(design)!=10 &
+        "Control_PBMC" %in% colnames(design) &
+        "Control_CSF" %in% colnames(design) &   "OINDI_CSF" %in% colnames(design) &
+        (!("OIND_PBMC" %in% colnames(design)) |
+        !("OIND_CSF" %in% colnames(design)) )
+        ){
       makeContrasts(
-        MS_CSF - MS_PBMC,
-        OIND_CSF - OIND_PBMC,
-        MS_CSF - OIND_CSF,
-        MS_PBMC - OIND_PBMC,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==5 & (!("OIND_CSF" %in% unique(y$samples$group)))){
-        makeContrasts(
-        MS_CSF - MS_PBMC,
-        Control_CSF - Control_PBMC,
-        MS_CSF - Control_CSF,
-        MS_PBMC - OIND_PBMC,
-        MS_PBMC - Control_PBMC,
-        OIND_PBMC - Control_PBMC,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==4 & !("OIND_PBMC" %in% unique(y$samples$group)) & !("OIND_CSF" %in% unique(y$samples$group))){
+      MS_CSF - MS_PBMC,
+      Control_CSF - Control_PBMC,
+      MS_CSF - OINDI_CSF,
+      OINDI_CSF - OINDI_PBMC,
+      MS_PBMC - OINDI_PBMC,
+      MS_CSF - Control_CSF,
+      OIND_CSF - Control_CSF,
+      MS_PBMC - Control_PBMC,
+      levels = design
+      )}  else if(
+        ncol(design)!=10 &
+        (!("Control_PBMC" %in% colnames(design)) |
+        !("Control_CSF" %in% colnames(design)) |
+        !("OIND_PBMC" %in% colnames(design)) |
+        !("OIND_CSF" %in% colnames(design)) ) &
+        "OINDI_CSF" %in% colnames(design)
+       ){
       makeContrasts(
-        MS_CSF - MS_PBMC,
-        Control_CSF - Control_PBMC,
-        MS_CSF - Control_CSF,
-        MS_PBMC - Control_PBMC,
-        levels = design
-      )
-    } else if(length((unique(y$samples$group)))==3 & !("OIND_PBMC" %in% unique(y$samples$group)) & !("Control_PBMC" %in% unique(y$samples$group))){
+      MS_CSF - MS_PBMC,
+      MS_CSF - OINDI_CSF,
+      OINDI_CSF - OINDI_PBMC,
+      MS_PBMC - OINDI_PBMC,
+      levels = design
+      )} else if(
+        ncol(design)!=10 &
+        !("Control_PBMC" %in% colnames(design)) |
+        !("Control_CSF" %in% colnames(design)) |
+        !("OIND_PBMC" %in% colnames(design)) |
+        !("OIND_CSF" %in% colnames(design)) |
+        !("OINDI_CSF" %in% colnames(design))
+       ){
       makeContrasts(
-        MS_CSF - MS_PBMC,
-        MS_CSF - OIND_CSF,
-        levels = design
-      )
-    }
+      MS_CSF - MS_PBMC,
+      MS_PBMC - OINDI_PBMC,
+      levels = design
+      )}
+
 
     # do de tests
     for(i in 1:length(colnames(contrast))){
@@ -1072,65 +1115,3 @@ saveRDS(t_cells,"t_cells.rds")
 
 # save whole dataset
 saveRDS(all_combo,"all_combo_with_updated_pheno.rds")
-
-#######################################
-# Diff DA
-#######################################
-
-# read
-ms = read_csv("edgeR_da_tests_MS_CSF - MS_PBMC.csv") %>% mutate(pheno = "MS")
-oind = read_csv("edgeR_da_tests_OIND_CSF - OIND_PBMC.csv") %>% mutate(pheno = "OIND")
-nind = read_csv("edgeR_da_tests_Control_CSF - Control_PBMC.csv") %>% mutate(pheno = "NIND")
-
-# combine
-combo_dat = bind_rows(ms,oind,nind)
-
-# plot
-ggplot(combo_dat,aes(logFC,cell,color=pheno,size=-log10(PValue)))+
-geom_point()+
-theme_minimal()+
-geom_vline(xintercept=0,linetype="dashed")
-
-
-plot_dat = combo_dat %>%
-  filter(pheno %in% c("MS","NIND")) %>%
-  pivot_wider(id_cols = cell,
-    names_from = pheno,
-    values_from = c(logFC, PValue))
-
-plot_dat = plot_dat %>%
-mutate(discordant = ifelse(
-PValue_MS < 0.05 & sign(logFC_MS) != sign(logFC_NIND) & abs(logFC_MS)>0.5,
-"yes","no"
-))
-
-ggplot(plot_dat,aes(logFC_NIND,logFC_MS,label=cell,color=discordant))+
-geom_point()+
-theme_minimal()+
-geom_vline(xintercept=0)+
-geom_hline(yintercept=0)+
-ggrepel::geom_text_repel(data = plot_dat %>% filter(discordant=="yes"),force=50)+
-scale_color_manual(values = c("grey","red"))+
-theme(legend.position="none")
-
-# repeat with OIND
-plot_dat = combo_dat %>%
-  filter(pheno %in% c("OIND","NIND")) %>%
-  pivot_wider(id_cols = cell,
-    names_from = pheno,
-    values_from = c(logFC, PValue))
-
-plot_dat = plot_dat %>%
-mutate(discordant = ifelse(
-PValue_OIND < 0.05 & sign(logFC_OIND) != sign(logFC_NIND) & abs(logFC_OIND)>0.5,
-"yes","no"
-))
-
-ggplot(plot_dat,aes(logFC_NIND,logFC_OIND,label=cell,color=discordant))+
-geom_point()+
-theme_minimal()+
-geom_vline(xintercept=0)+
-geom_hline(yintercept=0)+
-ggrepel::geom_text_repel(data = plot_dat %>% filter(discordant=="yes"),force=50)+
-scale_color_manual(values = c("grey","red"))+
-theme(legend.position="none")

@@ -48,7 +48,10 @@ comparisons = c(
   "MS_CSF - MS_PBMC",
   "Control_CSF - Control_PBMC",
   "MS_CSF - OIND_CSF",
-  "MS_PBMC - OIND_PBMC")
+  "MS_PBMC - OIND_PBMC",
+"MS_CSF - OINDI_CSF",
+"OINDI_CSF - OINDI_PBMC",
+"MS_PBMC - OINDI_PBMC")
 
 res_overall = list()
 plots = list()
@@ -63,20 +66,8 @@ do_gsea = function(geneset = "hallmark"){
     for(y in 1:length(comparisons)){
 
       comparison = comparisons[y]
-      this_comparison = if(comparison == "MS_CSF - MS_PBMC"){
-        "MS CSF vs MS PBMC"
-      } else if(comparison=="Control_CSF - Control_PBMC"){
-        "Control CSF vs Control PBMC"
-      } else if(comparison=="MS_PBMC - Control_PBMC"){
-        "MS PBMC vs Control PBMC"
-      } else if(comparison=="MS_CSF - Control_CSF"){
-        "MS CSF vs Control CSF"
-      } else if(comparison=="MS_CSF - OIND_CSF"){
-        "MS CSF vs OIND CSF"
-      } else if(comparison=="MS_PBMC - OIND_PBMC"){
-        "MS PBMC vs OIND PBMC"
-      }
-
+      this_comparison = stringr::str_replace_all(comparison,"_"," ")
+      this_comparison = stringr::str_replace_all(this_comparison,"-","vs")
 
       cluster = levels(factor(clusters))[x]
       message("Doing GSEA for cluster ",cluster)
@@ -145,7 +136,7 @@ message("Finished GSEA")
 res_overall$fdr = p.adjust(res_overall$pval,method="fdr")
 
 
-for(x in c( "MS CSF vs MS PBMC","MS CSF vs Control CSF","Control CSF vs Control PBMC","MS PBMC vs Control PBMC", "MS CSF vs OIND CSF", "MS PBMC vs OIND PBMC" )){
+for(x in c("MS CSF vs OINDI CSF","OINDI CSF vs OINDI PBMC","MS PBMC vs OINDI PBMC", "MS CSF vs MS PBMC","MS CSF vs Control CSF","Control CSF vs Control PBMC","MS PBMC vs Control PBMC", "MS CSF vs OIND CSF", "MS PBMC vs OIND PBMC" )){
   top_paths = res_overall %>% filter(comparison == x) %>% arrange(fdr) %>% distinct(pathway,.keep_all=TRUE) %>% head(n=10)
   plot_data = res_overall %>% filter(pathway %in% top_paths$pathway) %>% filter(comparison == x) %>% filter(grepl("HALLMARK",pathway)) %>% arrange(NES)
   plot_data$pathway = factor(plot_data$pathway,levels=unique(plot_data$pathway))
@@ -160,6 +151,7 @@ for(x in c( "MS CSF vs MS PBMC","MS CSF vs Control CSF","Control CSF vs Control 
       fdr < 0.001 & fdr >= 0.0001 ~ "**",
       fdr < 0.0001 ~"***"
     ))
+
   p=ggplot(plot_data,aes(cell_type,pathway,fill=NES,label=p_label))+
     geom_tile(col="black")+
     geom_text(size=4)+
@@ -171,102 +163,3 @@ for(x in c( "MS CSF vs MS PBMC","MS CSF vs Control CSF","Control CSF vs Control 
   print(p)
   dev.off()
 }
-
-# repeat with REACTOME 
-res_overall = list()
-do_gsea("reactome")
-res_overall = do.call("rbind",res_overall)
-write_csv(res_overall,"reactome_res_overall.csv")
-message("Finished GSEA")
-res_overall$fdr = p.adjust(res_overall$pval,method="fdr")
-
-
-for(x in c( "MS CSF vs MS PBMC","MS CSF vs Control CSF","Control CSF vs Control PBMC","MS PBMC vs Control PBMC", "MS CSF vs OIND CSF", "MS PBMC vs OIND PBMC" )){
-  top_paths = res_overall %>% filter(comparison == x) %>% arrange(fdr) %>% distinct(pathway,.keep_all=TRUE) %>% head(n=10)
-  plot_data = res_overall %>% filter(pathway %in% top_paths$pathway) %>% filter(comparison == x) %>% arrange(NES)
-  plot_data$pathway = factor(plot_data$pathway,levels=unique(plot_data$pathway))
-  plot_data$pathway = str_remove(plot_data$pathway,"REACTOME_")
-  png(paste0("summary_reactome_",x,".png"),res=300,units="in",width=8,height=4)
-
-  # set labels
-  plot_data = plot_data %>%
-    mutate(p_label = case_when(
-      fdr >= 0.01 ~ "",
-      fdr < 0.01 & fdr >= 0.001 ~"*",
-      fdr < 0.001 & fdr >= 0.0001 ~ "**",
-      fdr < 0.0001 ~"***"
-    ))
-  p=ggplot(plot_data,aes(cell_type,pathway,fill=NES,label=p_label))+
-    geom_tile(col="black")+
-    geom_text(size=4)+
-    scale_fill_gradient(low="purple",high="orange")+
-    theme_classic()+
-    labs(x="Cell type",y="Gene set")+
-    ggtitle(x)+
-    theme(axis.text.x=element_text(angle=90,vjust=-0.05))
-  print(p)
-  dev.off()
-}
-
-
-
-# cell dissimilarity
-overall_res = list()
-dissimilarity = function(){
-  for(x in 1:length(levels(factor(clusters)))){
-    for(y in 1:length(comparisons)){
-
-      comparison = comparisons[y]
-      this_comparison = if(comparison == "MS_CSF - MS_PBMC"){
-        "MS CSF vs MS PBMC"
-      } else if(comparison=="Control_CSF - Control_PBMC"){
-        "Control CSF vs Control PBMC"
-      } else if(comparison=="MS_PBMC - Control_PBMC"){
-        "MS PBMC vs Control PBMC"
-      } else if(comparison=="MS_CSF - Control_CSF"){
-        "MS CSF vs Control CSF"
-      } else if(comparison=="MS_CSF - OIND_CSF"){
-        "MS CSF vs OIND CSF"
-      } else if(comparison=="MS_PBMC - OIND_PBMC"){
-        "MS PBMC vs OIND PBMC"
-      }
-
-
-      cluster = levels(factor(clusters))[x]
-      message("Checking dissimilarity for cluster ",cluster)
-      message("Comparison:", comparison)
-
-      # read in and rank
-      file = paste0("../de_results/edgeR_de_tests_",comparison,"_",cluster,".csv")
-      if(!file.exists(file)){
-        message("File does not exist. Moving on")
-        next
-      }
-      de = read_csv(file)
-
-      # fine sig_de genes
-      prop_sig = nrow(de %>% filter(PValue<0.05/nrow(de)))/nrow(de)*100
-      logfc_90 = quantile(abs(de$logFC),0.9)
-      overall_res[[length(overall_res)+1]] <<- data.frame(cluster,comparison,prop_sig,logfc_90)
-  }
-}
-}
-
-dissimilarity()
-
-overall_res = do.call("bind_rows",overall_res)
-
-ggplot(overall_res,aes(prop_sig,cluster,fill=cluster))+
-facet_wrap(~comparison)+
-scale_fill_brewer(palette="Paired")+
-geom_col(color="black")+
-labs(x="% DE genes")+
-theme_minimal()
-
-ggplot(overall_res,aes(logfc_90,cluster,fill=cluster))+
-facet_wrap(~comparison)+
-scale_fill_brewer(palette="Paired")+
-geom_col(color="black")+
-labs(x="logFC_90")+
-theme_minimal()
-

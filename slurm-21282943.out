@@ -1,0 +1,31 @@
+Loading rhel8/default-icl
+  Loading requirement: dot rhel8/slurm singularity/current rhel8/global
+    cuda/11.4 intel-oneapi-compilers/2022.1.0/gcc/b6zld2mz
+    intel-oneapi-mpi/2021.6.0/intel/guxuvcpm
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+Attaching SeuratObject
+Loading required package: Rcpp
+
+Attaching package: ‘gridExtra’
+
+The following object is masked from ‘package:dplyr’:
+
+    combine
+
+reading in ./post_qc_batch_S15415-G6source_CSFcohort_Cam.rds
+reading in ./post_qc_batch_S15734-F3source_CSFcohort_Cam.rds
+reading in ./post_qc_batch_S16143-F1source_CSFcohort_Cam.rds
+reading in ./post_qc_batch_S17347-A11source_CSFcohort_Cam.rds
+reading in ./post_qc_batch_S17347-B11source_PBMCcohort_Cam.rds
+reading in ./post_qc_batch_S17384-H4source_CSFcohort_Cam.rds
+reading in ./post_qc_batch_S17385-E7source_PBMCcohort_EU.rds

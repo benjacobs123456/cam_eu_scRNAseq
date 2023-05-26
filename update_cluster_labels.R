@@ -121,8 +121,13 @@ rownames(all_combo@meta.data) = colnames(all_combo)
 
 # process biomarkers for supp table
 biomarkers = read_csv("biomarker_summary.csv")
+new_cluster_ids = data.frame(new_cluster_ids)
+new_cluster_ids$cluster = rownames(new_cluster_ids)
+
 new_cluster_ids = new_cluster_ids %>% left_join(
-biomarkers %>% dplyr::rename("cluster" = x), by = "cluster"
+biomarkers %>%
+  dplyr::rename("cluster" = x) %>%
+  mutate(cluster = as.character(cluster)), by = "cluster"
 )
 write_csv(new_cluster_ids,"supp_table_4_clusters.csv")
 

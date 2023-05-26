@@ -23,12 +23,26 @@ library(reshape2)
 # Read in data
 #######################################
 # set WD
-setwd("/rds/project/sjs1016/rds-sjs1016-msgen/bj_scrna/Cambridge_EU_combined/tcr/")
+setwd("/rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/TCR")
 
 # Read in data
-t_cells = readRDS("../t_cells_post_processing.rds")
+t_cells = readRDS("t_cells_post_processing.rds")
 rownames(t_cells@meta.data) = colnames(t_cells)
 
+# define plot theme
+theme_umap = function(){
+    theme_minimal() %+replace%
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks = element_blank(),
+      plot.title=element_blank(),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text.x = element_blank(),
+      axis.text.y = element_blank()
+    )
+}
 #######################################
 # Big picture descriptive stats
 #######################################
@@ -46,48 +60,211 @@ t_cells = RunUMAP(t_cells,reduction="harmony",dims=1:50)
 t_cells = FindNeighbors(t_cells)
 t_cells = FindClusters(t_cells,resolution=1)
 
-azimuth_t_cells = t_cells
-# sample 40,000 cells
-cells = colnames(azimuth_t_cells) %>% sample(size=40000)
-azimuth_t_cells[['cell_id']] = colnames(azimuth_t_cells)
-azimuth_t_cells@meta.data = azimuth_t_cells@meta.data %>% mutate(keep = ifelse(cell_id %in% cells,"yes","no"))
-azimuth_t_cells = subset(azimuth_t_cells,subset = keep == "yes")
-# remove SCT
-DefaultAssay(azimuth_t_cells) = "RNA"
-azimuth_t_cells[['SCT']] = NULL
-azimuth_t_cells = DietSeurat(azimuth_t_cells)
-saveRDS(azimuth_t_cells,"t_cells_trimmed_for_azimuth.rds")
-
-
-t_subsets_blueprint = c(
-"CD4+ T-cells",
-"CD4+ Tcm",
-"CD4+ Tem",
-"CD8+ T-cells",
-"CD8+ Tcm",
-"CD8+ Tem",
-"Tregs")
-
-t_subsets_monaco = c("T regulatory cells",
-"Th1/Th17 cells",
-"Effector memory CD8 T cells",
-"Th2 cells",
-"Central memory CD8 T cells",
+t_cell_names = c("Tcm/Naive helper T cells",
+"Tem/Trm cytotoxic T cells",
+"Tcm/Naive cytotoxic T cells",
+"Regulatory T cells",
+"MAIT cells",
+"Tem/Effector helper T cells",
+"Tem/Temra cytotoxic T cells",
+"Cycling T cells",
+"Early lymphoid/T lymphoid",
+"Memory CD4+ cytotoxic T cells",
+"CD8a/a",
 "Follicular helper T cells",
-"Th17 cells",
-"Terminal effector CD8 T cells",
-"Th1 cells",
-"Naive CD4 T cells",
-"Naive CD8 T cells",
-"Terminal effector CD4 T cells")
+"Type 1 helper T cells",
+"Double-positive thymocytes",
+"Treg(diff)",
+"Type 17 helper T cells",
+"Double-negative thymocytes",
+"NKT cells",
+"Trm cytotoxic T cells",
+"CD8a/b(entry)",
+"ILC",
+"Tem/Effector helper T cells PD1+")
+
+# filter to just celltypist B cell annotations
+t_cells = subset(t_cells,subset = ann_celltypist_highres %in% t_cell_names)
+t_cells = SetIdent(t_cells,value="ann_celltypist_highres")
 
 
 t_cell_markers = c("CD3G","IL7R","CD8A","TCF7","FOXP3","CCL5","CCR7","MKI67","CD27","TRGV9","TRDV2")
 
 
-# filter by annotation
-filtered_tcells = subset(t_cells, subset = ann_blueprint %in% t_subsets_blueprint & ann_monaco %in% t_subsets_monaco)
-annotations = filtered_tcells@meta.data %>% group_by(ann_monaco) %>% dplyr::count(ann_monaco)
+##############################
+# cluster biomarkers
+##############################
+#biomarkers = FindAllMarkers(t_cells,recorrect_umi=FALSE,logfc.threshold=0,min.pct=0,only.pos=TRUE)
+#topbiomarkers = biomarkers %>% group_by(cluster) %>% slice_min(order_by=p_val_adj,n=5)
+#write_csv(topbiomarkers,"biomarkers.csv")
+#write_csv(biomarkers,"all_biomarkers.csv")
+
+
+#######################################
+# DA & composition
+#######################################
+# restrict to abundant cells
+abundant_cells = t_cells@meta.data %>% dplyr::count(ann_celltypist_highres) %>% filter(n>200)
+t_cells = subset(t_cells, ann_celltypist_highres %in% abundant_cells$ann_celltypist_highres)
+
+# create new unique ID with donor and source
+t_cells@meta.data = t_cells@meta.data %>% mutate(donor_source = paste0(iid,"_",source))
+
+# PICK UP HERE
+t_cells@meta.data$cell_type = t_cells@meta.data$ann_celltypist_highres
+n_col = t_cells@meta.data$cell_type %>% unique %>% length
+colour_pal <- RColorBrewer::brewer.pal(n_col, "Paired")
+colour_pal <- grDevices::colorRampPalette(colour_pal)(n_col)
+
+t_cells@meta.data$cell_type = factor(
+  t_cells@meta.data$cell_type,
+  ordered=TRUE,
+  levels = c("Naive B cells","Memory B cells","Plasma cells",
+             "Transitional B cells","B cells","Germinal center B cells",
+             "Large pre-B cells","Cycling B cells","Small pre-B cells","Pre-pro-B cells","Follicular B cells"))
+
+
+
+# plots to check annotations
+p1=DimPlot(t_cells)
+p2=FeaturePlot(t_cells,features=b_cell_markers)
+p3=DotPlot(t_cells,features=b_cell_markers)
+
+png("dimplot.png",res=600,units="in",width=6,height=6)
+p1 + theme_umap() +  scale_color_manual(values = colour_pal)
+dev.off()
+
+png("featureplot.png",res=600,units="in",width=6,height=6)
+p2
+dev.off()
+
+png("dotplot.png",res=300,units="in",width=10,height=12)
+p3
+dev.off()
+
+p=DimPlot(t_cells,label=F,raster=F,group.by="cell_type")+
+  scale_color_manual(values = colour_pal)+
+  ggtitle("")+
+  theme_minimal()+
+  theme(axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  labs(x="",y="")
+
+png("dim_plot_simple_labels.png",res=600,units="in",width=5,height=4)
+p
+dev.off()
+
+p=DimPlot(t_cells,split.by="source",label=F,raster=F,group.by="cell_type")+
+  scale_color_manual(values = colour_pal)+
+  ggtitle("")+
+  theme_minimal()+
+  theme(axis.text.y=element_blank(),axis.text.x=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  labs(x="",y="")
+
+png("dim_plot_simple_labels_source.png",res=600,units="in",width=5,height=3)
+p
+dev.off()
+
+# stash sample info
+sample_info = t_cells@meta.data %>%
+  dplyr::select(iid,source,phenotype,donor_source) %>%
+  distinct(donor_source,.keep_all=TRUE)
+
+abundances = table(t_cells@meta.data$cell_type,t_cells@meta.data$donor_source)
+
+# filter out clusters with 5 counts
+abundances = abundances[rowSums(abundances)>5,]
+
+sample_info = sample_info %>% filter(donor_source %in% colnames(abundances))
+sample_info = sample_info[match(colnames(abundances),sample_info$donor_source),]
+sample_info$grouping = paste0(sample_info$phenotype,"_",sample_info$source)
+sample_info$grouping = sapply(sample_info$grouping, function(x){
+  if(x == "NIND_CSF"){
+    return("Control_CSF")
+  } else if(x == "NIND_PBMC"){
+    return("Control_PBMC")
+  } else {
+    return(x)
+  }
+})
+
+y.ab = DGEList(abundances, samples=sample_info)
+
+# update sample info
+y.ab$samples =  y.ab$samples %>% left_join(t_cells@meta.data %>%
+                                             distinct(donor_source,.keep_all=TRUE) %>%
+                                             dplyr::select(Age,Sex,donor_source),by="donor_source")
+
+# now loop
+da_overall_list = list()
+results_df = data.frame()
+design <- model.matrix(~ 0 + grouping + Age + Sex,y.ab$sample)
+colnames(design) = c(levels(factor(y.ab$samples$grouping)),"Age","Sex")
+
+y.ab <- estimateDisp(y.ab, design,trend="none")
+fit <- glmQLFit(y.ab, design, robust=TRUE, abundance.trend=FALSE)
+
+# define contrast for testing
+
+contrast =  makeContrasts(
+  MS_CSF - OIND_CSF,
+  MS_CSF - Control_CSF,
+  OIND_CSF - Control_CSF,
+  MS_PBMC - OIND_PBMC,
+  MS_PBMC - Control_PBMC,
+  OIND_PBMC - Control_PBMC,
+  MS_CSF - MS_PBMC,
+  OIND_CSF - OIND_PBMC,
+  OINDI_CSF - OINDI_PBMC,
+  MS_CSF - OINDI_CSF,
+  Control_CSF - Control_PBMC,
+  levels = design
+)
+
+da_plots = list()
+# do da tests
+for(i in 1:length(colnames(contrast))){
+  contrast_name = colnames(contrast)[i]
+  res = glmQLFTest(fit, contrast = contrast[,i])
+
+  # write to file
+  print(summary(decideTests(res)))
+  res = res$table %>% mutate(P_adj = p.adjust(PValue,method="fdr")) %>% arrange(PValue)
+  res$cell = rownames(res)
+  write_csv(res,paste0("./crude_labels_edgeR_da_tests_",contrast_name,".csv"))
+  res$significant = ifelse(res$P_adj<0.01,"yes","no")
+  res$direction = ifelse(res$logFC>0,"Up","Down")
+  comparison_label = contrast_name
+
+  # refactor cell types (for plotting)
+  res$cell = factor(res$cell,ordered=TRUE,
+                    levels = c("Naive B cells","Memory B cells","Plasma cells",
+                               "Transitional B cells","B cells","Germinal center B cells",
+                               "Large pre-B cells","Cycling B cells","Small pre-B cells"))
+
+  # da plot
+
+  plot = ggplot(res,aes(logFC,-log10(PValue),color=cell,label=cell))+
+    theme_classic()+
+    scale_color_manual(values = colour_pal)+
+    geom_text_repel(size=3,max.overlaps=100)+
+    geom_hline(yintercept= -log10(0.05/length(res$logFC)),alpha=0.2)+
+    geom_vline(xintercept = 0,alpha=0.2)+
+    NoLegend()+
+    ggtitle(comparison_label)+
+    scale_y_continuous(limits=c(0,50))+
+    scale_x_continuous(limits=c(-9,9))+
+    geom_point(shape=16,size=3)
+
+
+  png(paste0("./crude_labels_da_plot_",contrast_name,"_.png"),res=300,units="in",height=3,width=3)
+  print(plot)
+  dev.off()
+}
+
+
+
+
+
 
 #######################################
 # Basic plots

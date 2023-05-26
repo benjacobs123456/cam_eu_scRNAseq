@@ -13,7 +13,7 @@
 #SBATCH -J dandelion_bcr
 #! Which project should be charged:
 #SBATCH -A SAWCER-SL3-CPU
-#SBATCH -p icelake
+#SBATCH -p icelake-himem
 #! How many whole nodes should be allocated?
 #SBATCH --nodes=1
 #! How many (MPI) tasks will there be in total? (<= nodes*76)
@@ -84,6 +84,7 @@ for i in {1..212};
     singularity run -B $PWD --env R_LIBS_USER=~/dummy/:$R_LIBS_USER \
     ~/dandelion_jan23/sc-dandelion.sif dandelion-preprocess \
     --file_prefix "filtered" \
+    --flavour "original" \
     --filter_to_high_confidence \
     --keep_trailing_hyphen_number \
     --meta $META_FILE &

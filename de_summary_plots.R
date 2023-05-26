@@ -1,10 +1,158 @@
 library(tidyverse)
 
 
+#########################
+# DA SUMMARY PLOTS
+########################
+# set WD
+setwd("/rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/da_plots/")
+
+# find files
+files = list.files(full.names = T,pattern = "crude_labels_edgeR_da_tests")
+
+# read in
+da_res = purrr::map(files,function(x){
+  read_csv(x) %>%
+    mutate(contrast = str_remove_all(str_remove_all(x,"./crude_labels_edgeR_da_tests_"),".csv"))
+
+})
+
+da_res = do.call("bind_rows",da_res)
+
+# get FDR value
+da_res$P_adj = p.adjust(da_res$PValue,method="fdr")
+
+# plot
+da_res = da_res %>% filter(contrast %in% c(
+"MS_CSF - Control_CSF",
+"MS_CSF - OIND_CSF",
+"MS_CSF - OINDI_CSF",
+"MS_PBMC - Control_PBMC",
+"MS_PBMC - OIND_PBMC",
+"MS_PBMC - OINDI_PBMC",
+"MS_CSF - MS_PBMC",
+"OIND_CSF - OIND_PBMC",
+"OINDI_CSF - OINDI_PBMC",
+"Control_CSF - Control_PBMC"))
+
+da_res$contrast = factor(da_res$contrast, levels = c(
+"MS_CSF - Control_CSF",
+"MS_CSF - OIND_CSF",
+"MS_CSF - OINDI_CSF",
+"MS_PBMC - Control_PBMC",
+"MS_PBMC - OIND_PBMC",
+"MS_PBMC - OINDI_PBMC",
+"MS_CSF - MS_PBMC",
+"OIND_CSF - OIND_PBMC",
+"OINDI_CSF - OINDI_PBMC",
+"Control_CSF - Control_PBMC"),ordered=T)
+
+da_res$cell = factor(da_res$cell, levels = c(
+"B cells",
+"Plasma cells",
+"Macrophages",
+"CD16 Mono",
+"CD14 Mono",
+"mDCs",
+"HSPCs",
+"pDCs",
+"NK cells",
+"CD8 T cells",
+"CD4 T cells",
+"MAIT cells",
+"Tregs"),ordered=T)
+
+# plot
+p = ggplot(da_res %>%
+  mutate(p_label = case_when(
+    P_adj < 0.0005 ~ "***",
+    P_adj < 0.005 ~ "**",
+    P_adj < 0.05 ~ "*",
+    P_adj >= 0.05 ~ ""
+  )) %>%
+  mutate(logFC = ifelse(P_adj > 0.05, NA, logFC)),
+  aes(cell,contrast,fill=logFC,label = p_label))+
+  geom_tile(color="black")+
+  geom_text()+
+  theme_minimal()+
+  scale_fill_gradient2(low="purple",high="orange",midpoint = 0)+
+  labs(x="Cell type",y = "Comparison",fill="Log fold\nchange")
+
+png("da_summary_plot_all_cells.png",res=600,units="in",width=13,height=3)
+p
+dev.off()
+
+# repeat for celltypist
+
+# find files
+files = list.files(full.names = T,pattern = "celltypist_edgeR_da_tests")
+
+# read in
+da_res = purrr::map(files,function(x){
+  read_csv(x) %>%
+    mutate(contrast = str_remove_all(str_remove_all(x,"./celltypist_edgeR_da_tests_"),".csv"))
+
+})
+
+da_res = do.call("bind_rows",da_res)
+
+# get FDR
+da_res$P_adj = p.adjust(da_res$PValue,method="fdr")
+
+# plot
+da_res = da_res %>% filter(contrast %in% c(
+"MS_CSF - Control_CSF",
+"MS_CSF - OIND_CSF",
+"MS_CSF - OINDI_CSF",
+"MS_PBMC - Control_PBMC",
+"MS_PBMC - OIND_PBMC",
+"MS_PBMC - OINDI_PBMC",
+"MS_CSF - MS_PBMC",
+"OIND_CSF - OIND_PBMC",
+"OINDI_CSF - OINDI_PBMC",
+"Control_CSF - Control_PBMC"))
+
+da_res$contrast = factor(da_res$contrast, levels = c(
+"MS_CSF - Control_CSF",
+"MS_CSF - OIND_CSF",
+"MS_CSF - OINDI_CSF",
+"MS_PBMC - Control_PBMC",
+"MS_PBMC - OIND_PBMC",
+"MS_PBMC - OINDI_PBMC",
+"MS_CSF - MS_PBMC",
+"OIND_CSF - OIND_PBMC",
+"OINDI_CSF - OINDI_PBMC",
+"Control_CSF - Control_PBMC"),ordered=T)
+
+p = ggplot(da_res %>%
+  mutate(p_label = case_when(
+    P_adj < 0.0005 ~ "***",
+    P_adj < 0.005 ~ "**",
+    P_adj < 0.05 ~ "*",
+    P_adj >= 0.05 ~ ""
+  )) %>%
+  mutate(logFC = ifelse(P_adj > 0.05, NA, logFC)),
+  aes(cell,contrast,fill=logFC,label = p_label))+
+  geom_tile(color="black")+
+  geom_text()+
+  theme_minimal()+
+  scale_fill_gradient2(low="purple",high="orange",midpoint = 0)+
+  labs(x="Cell type",y = "Comparison",fill="Log fold\nchange")+
+  theme(axis.text.x = element_text(angle=90))
+
+
+png("da_summary_plot_all_cells_celltypist.png",res=600,units="in",width=13,height=6)
+p
+dev.off()
+
+##############################
+# DE SUMMARY PLOTS
+##############################
+
 # set WD
 setwd("/home/hpcjaco1/rds/hpc-work/Cambridge_EU_combined/de_plots")
 
-# list files 
+# list files
 files = list.files("../de_results/",pattern="edgeR_de",full.names=T)
 
 # read in files
@@ -16,16 +164,16 @@ de_res = purrr::map(files,function(x){
     mutate(contrast = y, cell_type = cell)
 })
 
-# combine 
+# combine
 de_res = do.call("bind_rows",de_res)
 
-# recalculate P_adj with strict Bonferroni 
+# recalculate P_adj with global Bonf
 de_res = de_res %>%
   mutate(P_adj = p.adjust(PValue,method="bonf"))
 
-# summary numbers 
-plot_dat = de_res %>% 
-  group_by(contrast,cell_type) %>% 
+# summary numbers
+plot_dat = de_res %>%
+  group_by(contrast,cell_type) %>%
   mutate(sig = ifelse(P_adj < 0.05, "Y","N")) %>%
   dplyr::count(sig) %>%
   mutate(prop = n/sum(n)) %>%
@@ -39,21 +187,17 @@ plot_dat = de_res %>%
 plot_dat %>% filter(pheno=="MS") %>% arrange(prop)
 plot_dat %>% filter(pheno=="MS") %>% arrange(prop) %>% ungroup %>%summarise(median(prop))
 
-ggplot(plot_dat,aes(cell_type,prop*100,fill=pheno))+
-  geom_col(color="black",position=position_dodge())+
-  theme_minimal()+
-  scale_fill_brewer(palette="Set1")
 
-# define function to make plots 
+# define function to make plots
 make_plot = function(comparison = "MS_CSF - OIND_CSF"){
-  
-  # initialise plot list 
+
+  # initialise plot list
   plots = list()
   res_overall = list()
-  # loop through cell types 
+  # loop through cell types
   for(this_cell_type in unique(de_res$cell_type)){
-    
-    
+
+
     # plot
     de_res = de_res %>%
       mutate(
@@ -72,12 +216,12 @@ make_plot = function(comparison = "MS_CSF - OIND_CSF"){
       scale_color_manual(values = colours)+
       ggtitle(str_remove_all(this_cell_type,"_"))+
       theme(legend.position = "none")
-    
-    plots[[length(plots)+1]] = p 
+
+    plots[[length(plots)+1]] = p
     res_overall[[length(res_overall)+1]] = plot_dat
   }
-  
-  
+
+
   png(paste0("de_",comparison,".png"),res=600,units="in",height=10,width=10)
   print(gridExtra::grid.arrange(grobs = plots, top = comparison))
   dev.off()
@@ -85,58 +229,27 @@ make_plot = function(comparison = "MS_CSF - OIND_CSF"){
   write_csv(res_overall,paste0("de_",comparison,".csv"))
 }
 
-
+# save overall results
+write_csv(de_res,"all_de_res.csv")
 make_plot("MS_CSF - OIND_CSF")
 make_plot("MS_CSF - Control_CSF")
-
+make_plot("MS_CSF - OINDI_CSF")
 make_plot("MS_CSF - MS_PBMC")
 make_plot("OIND_CSF - OIND_PBMC")
+make_plot("OINDI_CSF - OINDI_PBMC")
 make_plot("Control_CSF - Control_PBMC")
+make_plot("MS_PBMC - OIND_PBMC")
+make_plot("MS_PBMC - OINDI_PBMC")
+
+de_res = de_res %>% filter(cell_type != "CD16 Mono")
 make_plot("MS_PBMC - Control_PBMC")
-make_plot("MS_PBMC - Control_PBMC")
-
-
-# get gene sets for plotting 
-library(msigdbr)
-library(fgsea)
-
-# retrieve gene sets
-h_gene_sets = msigdbr(species = "Homo sapiens", category = "H")
-hallmark_list = split(x = h_gene_sets$gene_symbol, f = h_gene_sets$gs_name)
-
-
-chol_genes = hallmark_list$HALLMARK_CHOLESTEROL_HOMEOSTASIS
-mtor_genes = hallmark_list$HALLMARK_MTORC1_SIGNALING
-oxphos_genes = hallmark_list$HALLMARK_OXIDATIVE_PHOSPHORYLATION
-
-
-# pathway = chol_genes 
-pathway = oxphos_genes
-comparison = "MS_CSF - MS_PBMC"
-
-# plot
-this_pathway = de_res %>%
-  filter(gene %in% pathway & contrast == comparison) %>%
-  mutate(
-    direction = case_when(
-      P_adj < 0.05 & logFC>0 ~ "Up",
-      P_adj < 0.05 & logFC<0 ~ "Down",
-      P_adj >=0.05 ~ "nonsig"
-    ))
-top_genes = this_pathway %>%
-  arrange(desc(logFC)) %>%
-  distinct(gene) %>%
-  head(n=30)
-this_pathway = this_pathway %>% filter(gene %in% top_genes$gene)
-
-colours = c("Up" = "orange", "Down" = "purple", "nonsig" = "grey")
-
-ggplot(this_pathway,aes(cell_type,gene,fill=direction))+
-  geom_tile()+
-  scale_fill_manual(values = colours)+
-  theme_minimal()+
-  theme(legend.position = "none")
 
 
 
-# de plot
+
+de_res %>%
+  filter(contrast %in% c(
+  "MS_CSF - OINDI_CSF",
+  "MS_CSF - OIND_CSF"
+  )) %>%
+  filter(P_adj)

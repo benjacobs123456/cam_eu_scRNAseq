@@ -21,19 +21,20 @@ library(corrplot)
 # set WD
 setwd("/rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/ccc/")
 
-# find files 
+# find files
 files = list.files("./per_sample/",full.names = T)
 
-# read in 
+# read in
 liana_res_overall = read_csv(files)
 
 
 # get sc data
 sc_dat = readRDS("/home/hpcjaco1/rds/hpc-work/Cambridge_EU_combined/all_combo_with_updated_pheno.rds")
 
-# get metadata 
+# get metadata
 sc_dat_metadata = sc_dat@meta.data
 write_csv(sc_dat_metadata,"sc_dat_metadata.csv")
+# sc_dat_metadata = read_csv("sc_dat_metadata.csv")
 
 #######################################
 # Correlation between cell numbers
@@ -43,7 +44,7 @@ write_csv(sc_dat_metadata,"sc_dat_metadata.csv")
 sc_dat_metadata = read_csv("sc_dat_metadata.csv") %>%
   filter(source=="CSF" & Category=="MS")
 
-counts_per_person = sc_dat_metadata %>% 
+counts_per_person = sc_dat_metadata %>%
   filter(!cell_type_crude %in% c("HSPCs","Platelets")) %>%
   group_by(iid) %>%
   dplyr::count(cell_type_crude) %>%
@@ -63,7 +64,7 @@ pbonf = 0.05/j
 library(corrplot)
 png("corrplot_celltypes.png",res=600,units="in",width=6,height=6)
 corrplot::corrplot(cor_mat,p.mat = cor_pvals$p,
-                   addCoef.col ='black', number.cex = 0.8, order = 'hclust', diag=FALSE, insig='blank',
+                   number.cex = 0.8, order = 'hclust', diag=FALSE, insig='label_sig',
                    tl.srt = 45, col = COL2('PuOr', 10), type="lower",
                    sig.level = pbonf)
 dev.off()
@@ -97,46 +98,46 @@ liana_res_overall = liana_res_overall %>%
   mutate(interaction_nocell = paste0(ligand.complex,"_",receptor.complex)) %>%
   mutate(sig = ifelse(aggregate_rank < 0.05, "yes","no"))
 
-# 
+#
 b_pcs = liana_res_overall %>%
-  filter(target %in% c("B cells","Plasma cells")) 
+  filter(target %in% c("B cells","Plasma cells"))
 
-# find sig pathways 
+# find sig pathways
 find_sig_interactions = function(
   pheno = "MS",
   cell_type = "Plasma cells"
 ){
-  
+
   # filter
   int_dat = b_pcs %>%
-    filter(target==cell_type & phenotype==pheno) 
+    filter(target==cell_type & phenotype==pheno)
   n_samples = int_dat %>% distinct(iid) %>% nrow
   message("N=",n_samples)
-  
-  # find sig interactions 
+
+  # find sig interactions
   top_interactions = int_dat %>%
     group_by(interaction) %>%
     dplyr::count(sig) %>%
     mutate(prop_sig = n/sum(n), total = sum(n)) %>%
     filter(sig=="yes") %>%
     arrange(desc(prop_sig))
-  
-  
-  int_dat %>% 
+
+
+  int_dat %>%
     filter(interaction %in% top_interactions$interaction) %>%
     group_by(interaction,source,target,ligand.complex,receptor.complex,phenotype) %>%
     summarise(median_LR = median(sca.LRscore)) %>%
     left_join(top_interactions,by="interaction") %>%
     arrange(desc(prop_sig)) %>%
     filter(prop_sig>0.9 & total>0.5*n_samples)
-  
-  
+
+
 }
 
 res = bind_rows(
   find_sig_interactions("MS","B cells"),
   find_sig_interactions("MS","Plasma cells")
-) 
+)
 print(res,n=30) %>% filter(ligand.complex=="MIF")
 find_sig_interactions("OIND","B cells")
 find_sig_interactions("OIND","Plasma cells")
@@ -149,28 +150,28 @@ chemokine_list = read_tsv("chemokines.txt")
 liana_res_overall = liana_res_overall %>%
   filter(receptor.complex %in% chemokine_list$`Approved symbol`)
 
-# find sig pathways 
+# find sig pathways
 find_sig_interactions = function(
   pheno = "MS",
   cell_type = "Plasma cells"
 ){
-  
+
   # filter
   int_dat = liana_res_overall %>%
-    filter(target==cell_type & phenotype==pheno) 
+    filter(target==cell_type & phenotype==pheno)
   n_samples = int_dat %>% distinct(iid) %>% nrow
   message("N=",n_samples)
-  
-  # find sig interactions 
+
+  # find sig interactions
   top_interactions = int_dat %>%
     group_by(interaction) %>%
     dplyr::count(sig) %>%
     mutate(prop_sig = n/sum(n), total = sum(n)) %>%
     filter(sig=="yes") %>%
     arrange(desc(prop_sig))
-  
-  
-  int_dat %>% 
+
+
+  int_dat %>%
     filter(interaction %in% top_interactions$interaction) %>%
     group_by(interaction,source,target,ligand.complex,receptor.complex,phenotype) %>%
     summarise(median_LR = median(sca.LRscore)) %>%
@@ -184,20 +185,18 @@ res = bind_rows(
   find_sig_interactions("MS","Plasma cells"),
   find_sig_interactions("OIND","B cells"),
   find_sig_interactions("OIND","Plasma cells"),
+  find_sig_interactions("OINDI","B cells"),
+  find_sig_interactions("OINDI","Plasma cells"),
   find_sig_interactions("NIND","B cells"),
   find_sig_interactions("NIND","Plasma cells")
 )
 
-res$phenotype = factor(res$phenotype,levels=c("NIND","OIND","MS"),ordered = T)
+res$phenotype = factor(res$phenotype,levels=c("NIND","OINDI","OIND","MS"),ordered = T)
+write_csv(res %>% filter(total>10),"liana_res_chemokines.csv")
+
 liana_res_overall %>% filter(receptor.complex=="CCR4" & ligand.complex=="CCL22") %>%
   arrange(aggregate_rank) %>%
   filter(target=="Plasma cells")
-
-
-just_oind = res %>%
-  filter(phenotype=="OIND") %>%
-  arrange(desc(prop_sig)) %>%
-  filter(total>10)
 
 just_ms = res %>%
   filter(phenotype=="MS") %>%
@@ -237,22 +236,51 @@ library(reshape2)
 #######################################
 # Read in data
 #######################################
+library(Seurat)
 
 # set WD
 setwd("/rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/ccc/")
 
-# get sc data
-sc_dat = readRDS("/home/hpcjaco1/rds/hpc-work/Cambridge_EU_combined/b_cells.rds")
+# Read in data
+b_cells = readRDS("/rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/BCR/b_cells_post_processing.rds")
+rownames(b_cells@meta.data) = colnames(b_cells)
 
+#######################################
+# Recluster and reannotate
+#######################################
 
-# recluster 
+b_cell_markers = c("IGHD","IGHG1","IGHM","CD27","CD38","MKI67")
+
+# recluster
 set.seed(1)
 DefaultAssay(b_cells)="SCT"
 b_cells = RunUMAP(b_cells,reduction="harmony",dims=1:50)
 b_cells = FindNeighbors(b_cells)
 b_cells = FindClusters(b_cells,resolution=0.2)
 
-b_cells = subset(b_cells, ann_celltypist_highres %in% c("Plasma cells","Memory B cells","Naive B cells")) 
+# filter to just celltypist B cell annotations
+b_cells = subset(b_cells,subset = ann_celltypist_highres %in% c("B cells","Cycling B cells","Germinal center B cells","Large pre-B cells","Memory B cells","Naive B cells","Small pre-B cells","Plasma cells","Transitional B cells","Follicular B cells","Pre-pro-B cells"))
+b_cells = SetIdent(b_cells,value="ann_celltypist_highres")
+
+# filter doublets (based on UMAP)
+png("test.png")
+DimPlot(b_cells,split.by="cell_type_crude")
+dev.off()
+
+cell_umap_embeddings1 = b_cells@reductions$umap@cell.embeddings %>%
+data.frame() %>%
+filter(UMAP_1 < -5)
+cell_umap_embeddings2 = b_cells@reductions$umap@cell.embeddings %>%
+data.frame() %>%
+filter(UMAP_1 > -5)
+
+# filter
+b_cells = subset(b_cells,
+ ( ann_celltypist_highres == "Plasma cells" & cell_id %in% rownames(cell_umap_embeddings1) ) |
+ ( ann_celltypist_highres != "Plasma cells" & cell_id %in% rownames(cell_umap_embeddings2) )
+   )
+
+
 p1=FeaturePlot(b_cells,split.by="source",features=c("CXCR3","CXCR4","IGHD","CD27"))
 
 # define plot theme
@@ -270,19 +298,21 @@ theme_umap = function(){
     )
 }
 
+
+b_cells = subset(b_cells,subset = ann_celltypist_highres %in% c("Memory B cells","Naive B cells","Plasma cells"))
 p=DimPlot(subset(b_cells, phenotype=="MS"),group.by="ann_celltypist_highres")+
   scale_color_brewer(palette="Paired")+
   theme_umap()
 png("b_cells.png",res=600,units="in",width=3,height=1)
 p
 dev.off()
-png("b_cells_cc_recptors.png",res=600,units="in",width=8,height=8)
+png("b_cells_cc_receptors.png",res=600,units="in",width=8,height=8)
 p1
 dev.off()
 
 
 
 
-# plot 
+# plot
 DefaultAssay(b_cells)="RNA"
 FeaturePlot(b_cells,features="CCL22")

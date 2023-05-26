@@ -192,9 +192,12 @@ t_cells = subset(t_cells, original_barcode %in% combined_tcr$cell_id & original_
 
 # filter VDJ to contigs with GEX data
 combined_tcr = combined_tcr %>% filter(cell_id %in% t_cells@meta.data$original_barcode)
+message("There are", nrow(combined_tcr)," contigs")
+message("There are", nrow(combined_tcr %>% distinct(cell_id))," unique cells in TCR data")
 
 # rename cells with new barcodes
 t_cells = RenameCells(t_cells,new.names=t_cells@meta.data$original_barcode)
+message("There are", nrow(t_cells@meta.data %>% nrow)," unique cells in gex data")
 
 
 # change to python object
@@ -205,6 +208,7 @@ obs = r_to_py(t_cells@meta.data)
 normcounts = r_to_py(Matrix::t(GetAssayData(t_cells)))
 adata = sc$AnnData(X = normcounts, obs = obs)
 sc$pp$neighbors(adata)
+message("Finished making python object")
 
 # Combine tcr data and GEX
 vdj_results_list = ddl$pp$filter_contigs(combined_tcr,
@@ -215,7 +219,7 @@ vdj_results_list = ddl$pp$filter_contigs(combined_tcr,
   filter_vj_chains=F,
   filter_missing=T,
   productive_only=T,
-  keep_highest_umi=TRUE)
+  keep_highest_umi=T)
 
 # Print no. of cells passing QC
 vdj_results_list[[2]]$obs %>% filter(

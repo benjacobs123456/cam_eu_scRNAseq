@@ -38,7 +38,7 @@
 #! Each task is allocated 1 CPU by default, and each CPU is allocated 3380 MiB
 #! of memory. If this is insufficient, also specify
 #! --cpus-per-task and/or --mem (the latter specifies MiB per node).
-#SBATCH --cpus-per-task 16
+#SBATCH --cpus-per-task 64
 
 #! Number of nodes and tasks per node allocated by SLURM (do not change):
 numnodes=$SLURM_JOB_NUM_NODES
@@ -84,10 +84,11 @@ for i in {1..214};
     singularity run -B $PWD --env R_LIBS_USER=~/dummy/:$R_LIBS_USER \
     ~/dandelion_jan23/sc-dandelion.sif dandelion-preprocess \
     --file_prefix "filtered" \
+    --flavour "original" \
     --filter_to_high_confidence \
     --keep_trailing_hyphen_number \
-    --chain TR \
-    --meta $META_FILE &
+    --meta $META_FILE \
+    --chain TR &
   done
 
 

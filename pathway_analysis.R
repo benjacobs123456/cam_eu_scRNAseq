@@ -32,7 +32,10 @@ comparisons = c(
   "MS_CSF - Control_CSF",
   "MS_CSF - OIND_CSF",
   "MS_CSF - MS_PBMC",
-  "OIND_CSF - OIND_PBMC")
+  "OIND_CSF - OIND_PBMC",
+"OINDI_CSF - OINDI_PBMC",
+"MS_CSF - OINDI_CSF",
+"MS_PBMC - OINDI_PBMC")
 
 # define cluster names
 clusters = c("B cells","CD14 Mono","CD16 Mono","CD4 T cells","CD8 T cells","MAIT","mDCs","NK cells","pDCs","Plasma cells","Tregs")
@@ -52,19 +55,9 @@ do_progeny = function(n_perm=10000){
     for(y in 1:length(comparisons)){
       # get name of DE file to read in
       comparison = comparisons[y]
-      this_comparison = if(comparison == "MS_CSF - MS_PBMC"){
-        "MS CSF vs MS PBMC"
-      } else if(comparison=="Control_CSF - Control_PBMC"){
-        "Control CSF vs Control PBMC"
-      } else if(comparison=="MS_PBMC - Control_PBMC"){
-        "MS PBMC vs Control PBMC"
-      } else if(comparison=="MS_CSF - Control_CSF"){
-        "MS CSF vs Control CSF"
-      } else if(comparison=="MS_CSF - OIND_CSF"){
-        "MS CSF vs OIND CSF"
-      } else if(comparison=="MS_PBMC - OIND_PBMC"){
-        "MS PBMC vs OIND PBMC"
-      }
+
+      this_comparison = stringr::str_replace_all(comparison,"_"," ")
+      this_comparison = stringr::str_replace_all(this_comparison,"-","vs")
 
       cluster = levels(factor(clusters))[x]
       message("Doing pathway analysis for cluster ",cluster)
@@ -170,19 +163,8 @@ do_dorothea = function(n_perm=10000){
     for(y in 1:length(comparisons)){
       # get name of DE file to read in
       comparison = comparisons[y]
-      this_comparison = if(comparison == "MS_CSF - MS_PBMC"){
-        "MS CSF vs MS PBMC"
-      } else if(comparison=="Control_CSF - Control_PBMC"){
-        "Control CSF vs Control PBMC"
-      } else if(comparison=="MS_PBMC - Control_PBMC"){
-        "MS PBMC vs Control PBMC"
-      } else if(comparison=="MS_CSF - Control_CSF"){
-        "MS CSF vs Control CSF"
-      } else if(comparison=="MS_CSF - OIND_CSF"){
-        "MS CSF vs OIND CSF"
-      } else if(comparison=="MS_PBMC - OIND_PBMC"){
-        "MS PBMC vs OIND PBMC"
-      }
+      this_comparison = stringr::str_replace_all(comparison,"_"," ")
+      this_comparison = stringr::str_replace_all(this_comparison,"-","vs")
 
       cluster = levels(factor(clusters))[x]
       message("Doing pathway analysis for cluster ",cluster)

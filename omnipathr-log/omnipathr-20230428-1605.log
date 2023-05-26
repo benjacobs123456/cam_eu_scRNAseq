@@ -1,0 +1,12 @@
+[2023-04-28 16:05:24] [INFO]    [OmnipathR] Welcome to OmnipathR!
+[2023-04-28 16:05:24] [TRACE]   [OmnipathR] Reading JSON from `/home/hpcjaco1/.cache/OmnipathR/cache.json` (encoding: UTF-8).
+[2023-04-28 16:05:24] [TRACE]   [OmnipathR] JSON validation successful: TRUE
+[2023-04-28 16:05:24] [INFO]    [OmnipathR] Initialized cache: `/home/hpcjaco1/.cache/OmnipathR`.
+[2023-04-28 16:05:24] [TRACE]   [OmnipathR] Reading JSON from `/home/hpcjaco1/R/x86_64-pc-linux-gnu-library/4.1/OmnipathR/db/db_def.json` (encoding: UTF-8).
+[2023-04-28 16:05:24] [TRACE]   [OmnipathR] JSON validation successful: TRUE
+[2023-04-28 16:05:25] [TRACE]   [OmnipathR] Reading JSON from `/home/hpcjaco1/R/x86_64-pc-linux-gnu-library/4.1/OmnipathR/internal/magic_bytes.json` (encoding: UTF-8).
+[2023-04-28 16:05:25] [TRACE]   [OmnipathR] JSON validation successful: TRUE
+[2023-04-28 16:05:25] [TRACE]   [OmnipathR] Reading JSON from `/home/hpcjaco1/R/x86_64-pc-linux-gnu-library/4.1/OmnipathR/internal/urls.json` (encoding: UTF-8).
+[2023-04-28 16:05:25] [TRACE]   [OmnipathR] JSON validation successful: TRUE
+[2023-04-28 16:05:25] [TRACE]   [OmnipathR] Reading JSON from `/home/hpcjaco1/R/x86_64-pc-linux-gnu-library/4.1/OmnipathR/internal/id_types.json` (encoding: UTF-8).
+[2023-04-28 16:05:25] [TRACE]   [OmnipathR] JSON validation successful: TRUE

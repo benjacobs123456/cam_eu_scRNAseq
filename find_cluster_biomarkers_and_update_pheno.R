@@ -182,21 +182,7 @@ all_combo@meta.data = all_combo@meta.data %>%
 
 sample_overlap = read_csv("/rds/user/hpcjaco1/hpc-work/TUM data/data_featherstone/christiane/SC/transfer_CAM/TUM_part1/Sample_Overlap.csv")
 
-# save replicates
-replicates = subset(all_combo, iid %in% sample_overlap$TUM_PatID | iid %in% sample_overlap$CAM_SAMPLE_ID)
-
-# examine replicates
-for(i in c(1:nrow(sample_overlap))){
-  this_source = "CSF"
-  dat_to_plot = subset(replicates, iid == sample_overlap$TUM_PatID[i] | iid == sample_overlap$CAM_SAMPLE_ID[i] & source == this_source)
-  p = DimPlot(dat_to_plot,split.by="processing_site",group.by="cell_type_crude")+NoLegend() +theme_umap()
-  plot_fx(paste0("subject_",i,"replicate_csf.png"),p)
-}
-
-# look at major batch effects
-p = DimPlot(subset(all_combo, source=="CSF" & Category == "MS"),split.by="processing_site",group.by="cell_type_crude")+NoLegend() +theme_umap()
-plot_fx("batch_effects_umap_csf_ms.png",p)
-
+rownames(all_combo@meta.data) = colnames(all_combo)
 
 # write demographics file
 
@@ -208,7 +194,7 @@ rownames(pheno_simple) = NULL
 pheno_simple = pheno_simple %>%
 tidyr::pivot_wider(values_from = source,
 names_from = source,
-id_cols = 1:6) %>%
+id_cols = 1:7) %>%
 mutate(CSF = ifelse(!is.na(CSF),"Yes","No")) %>%
 mutate(PBMC = ifelse(!is.na(PBMC),"Yes","No")) %>%
 arrange(Category,processing_site) %>%
@@ -300,6 +286,9 @@ png("dice_calls.png",res=300,units="in",width=12,height=8)
 p
 dev.off()
 
+# save
+saveRDS(all_combo,"all_combo_with_pheno.rds")
+
 ####################################
 # cluster biomarkers
 ####################################
@@ -317,6 +306,3 @@ biomarkers = lapply(unique(biomarker_summary$cluster),function(x){
 })
 biomarkers = do.call("bind_rows",biomarkers) %>% tibble::as_tibble()
 write_csv(biomarkers,"biomarker_summary.csv")
-
-# save
-saveRDS(all_combo,"all_combo_with_pheno.rds")
