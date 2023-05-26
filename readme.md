@@ -44,7 +44,7 @@ sbatch celltypist.sh
 - Which runs celltypist in each cluster
 
 # Update cluster IDs
-`````unix
+````unix
 sbatch update_clusters.sh
 ````
 - Which runs `Rscript update_cluster_labels.R` to update cluster IDs
