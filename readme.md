@@ -28,7 +28,7 @@ This script runs  `Rscript umap.R` which performs UMAP and Louvain clustering ac
 
 # Cluster biomarkers
 ````unix
-Rscript cluster_biomarkers_icelake.sh
+sbatch cluster_biomarkers_icelake.sh
 ````
 
 This script runs `Rscript find_cluster_biomarkers_and_update_pheno.R` which does the following
@@ -54,8 +54,8 @@ To run DE and DA using the broad clusters:
 ````unix
 sbatch de_icelake.sh
 ````
-- Runs DE tests with `Rscript de_summary_plots.R`
-- Summary plots then made with `Rscript  de_da_tests_phenotypes.R`
+- Runs DE tests with `Rscript de_da_tests_phenotypes.R`
+- Summary plots then made with `Rscript  de_summary_plots.R`
 
 
 # GSEA
