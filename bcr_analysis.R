@@ -43,6 +43,71 @@ message("No. cells:")
 nrow(b_cells@meta.data)
 
 #######################################
+# Clonal definition sens check
+#######################################
+
+sensitivity_analysis = b_cells@meta.data %>%
+  mutate(cdr3_length_vdj = nchar(junction_aa_VDJ)) %>%
+  mutate(cdr3_length_vj = nchar(junction_aa_VJ))
+
+
+sensitivity_analysis %>%
+  group_by(iid,v_call_genotyped_VJ,v_call_genotyped_VDJ) %>%
+  dplyr::count() %>%
+  filter(n>1)
+
+sensitivity_analysis %>%
+  group_by(iid,v_call_genotyped_VJ,v_call_genotyped_VDJ) %>%
+  dplyr::count() %>%
+  filter(n>1) %>%
+  ungroup %>%
+  distinct(iid)
+
+clonal_groups = sensitivity_analysis %>%
+  group_by(iid,v_call_genotyped_VJ,v_call_genotyped_VDJ, cdr3_length_vdj,cdr3_length_vj) %>%
+  dplyr::count() %>%
+  filter(n>1)
+
+
+# calculate lnh
+lnh_fx = function(a,b){
+
+  running_total = list()
+  str_length = nchar(as.character(a))
+  for(n in c(1:str_length)){
+    running_total[[n]] = substr(a,n,n) == substr(b,n,n)
+  }
+  lnh = sum(unlist(running_total)) / str_length
+  lnh
+}
+
+all_cells = list()
+for(i in c(1:nrow(clonal_groups))){
+
+matches = sensitivity_analysis %>%
+filter(
+iid == clonal_groups$iid[i] &
+v_call_genotyped_VJ == clonal_groups$v_call_genotyped_VJ[i] &
+v_call_genotyped_VDJ == clonal_groups$v_call_genotyped_VDJ[i] &
+cdr3_length_vj == clonal_groups$cdr3_length_vj[i] &
+cdr3_length_vdj == clonal_groups$cdr3_length_vdj[i]
+)
+
+# make comparison df
+grid = expand.grid(unique(matches$junction_aa_VDJ),unique(matches$junction_aa_VDJ))
+LNH = list()
+for(j in c(1:nrow(grid))){
+  LNH[[j]] = lnh_fx(grid$Var1[j],grid$Var2[j])
+}
+grid$LNH = unlist(LNH)
+grid$clonotype_id = paste0("cloneid_",i)
+all_cells[[i]] = grid
+}
+
+all_cells = do.call("bind_rows",all_cells)
+
+
+#######################################
 # Recluster and reannotate
 #######################################
 
@@ -897,6 +962,20 @@ png("csf_v_pbmc_just_ms_bcr_repertoire.png",res=300,units="in",height=8,width=8)
 do.call("grid.arrange",plot_list)
 dev.off()
 
+# repeat for all phenos
+# compare csf vs periphery - just ms
+csf_v_pbmc_plot_all = function(x){
+  DimPlot(b_cells,split.by="source",group.by=x)+
+    scale_color_manual(values = colour_pal)+
+    theme_umap()
+}
+plot_list = lapply(var_list,csf_v_pbmc_plot_all)
+
+png("csf_v_pbmc_all_phenos_bcr_repertoire.png",res=300,units="in",height=8,width=8)
+do.call("grid.arrange",plot_list)
+dev.off()
+
+
 
 # bar plots
 make_categorical_plot = function(x){
@@ -904,7 +983,6 @@ make_categorical_plot = function(x){
     geom_bar(position="fill",color="black")+
     facet_wrap(~source)+
     theme_bw()+
-    scale_fill_brewer(palette = "Set3")+
     labs(x="Phenotype",fill=x,y="Proportion")
 }
 
@@ -913,14 +991,13 @@ make_continuous_plot = function(x){
     geom_boxplot(color="black")+
     facet_wrap(~source)+
     theme_bw()+
-    scale_fill_brewer(palette = "Set3")+
     labs(x="Phenotype",y=x)
 }
 
-var_list = list("expanded_clone","shm_positive","isotype","ighv_family","status_summary","c_call_VDJ")
+var_list = list("expanded_clone","shm_positive","isotype","ighv_family","status_summary","cell_type")
 plot_list = lapply(var_list,make_categorical_plot)
 
-png("csf_v_pbmc_bcr_repertoire.png",res=300,units="in",height=10,width=10)
+png("csf_v_pbmc_bcr_repertoire.png",res=300,units="in",height=14,width=14)
 do.call("grid.arrange",plot_list)
 dev.off()
 
@@ -1114,6 +1191,37 @@ do_da_var(data = b_cells@meta.data,
           plot_title = "ighv_segments",
           ylim=20)
 
+# by cell type
+do_da_var(data = b_cells@meta.data %>% filter(cell_type=="Plasma cells"),
+          x = "phenotype",
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "MS_CSF - OIND_CSF",
+                                "MS_CSF - OINDI_CSF"),
+          variable="v_call_simple",
+          var_label = "IGHV allele",
+          plot_title = "ighv_segments_pcs",
+          ylim=20)
+
+# by cell type
+do_da_var(data = b_cells@meta.data %>% filter(cell_type=="Memory B cells"),
+x = "phenotype",
+contrasts_to_test = c("MS_CSF - MS_PBMC",
+            "MS_CSF - OIND_CSF",
+            "MS_CSF - OINDI_CSF"),
+variable="v_call_simple",
+var_label = "IGHV allele",
+plot_title = "ighv_segments_memb",
+ylim=20)
+# by cell type
+do_da_var(data = b_cells@meta.data %>% filter(cell_type=="Naive B cells"),
+x = "phenotype",
+contrasts_to_test = c("MS_CSF - MS_PBMC",
+                      "MS_CSF - OIND_CSF",
+                      "MS_CSF - OINDI_CSF"),
+variable="v_call_simple",
+var_label = "IGHV allele",
+plot_title = "ighv_segments_naive",
+ylim=20)
 
 # individual gene segments
 do_da_var(data = b_cells@meta.data %>%
@@ -1284,7 +1392,7 @@ binary_comparison = function(variable,plot_title,level="Yes"){
     message(round(median(a),2)," ",round(median(b),2))
     message(round(t.test(a,b)$p.value,2))
 
-    
+
   phenos = unique(props$phenotype)
   pvals = list()
   for(i in c(1:length(phenos))){
@@ -1355,10 +1463,58 @@ do_cont_comparison = function(variable, plot_title,axislab){
   print(p)
   dev.off()
 }
+
+do_cont_comparison2 = function(variable, plot_title,axislab,pheno){
+  pvals = list()
+
+  dat = b_cells@meta.data %>%
+    filter(phenotype==pheno & cell_type %in% cells)
+  for(i in c(1:length(cells))){
+    a = dat[dat$source=="CSF" & dat$cell_type==cells[i],][[variable]]
+    b = dat[dat$source=="PBMC" & dat$cell_type==cells[i],][[variable]]
+    pvals[[i]] = t.test(a,b)$p.value
+  }
+  pvals = data.frame(cell_type = cells,P = unlist(pvals))
+
+  dat = dat %>%
+    left_join(pvals,by="cell_type") %>%
+    mutate(P = simplify_pval(P))
+
+  p=ggplot(dat,aes(cell_type,.data[[variable]],fill=source))+
+    geom_boxplot(color="black")+
+    scale_fill_brewer(palette="Set1")+
+    ggtitle(plot_title)+
+    geom_text(mapping = aes(x = cell_type,y = 1,label = P))+
+    theme_minimal()+
+    labs(x="Cell type",y=axislab)
+
+
+  png(file=paste0(plot_title,"_comparison.png"),res=300,units="in",width=6,height=4)
+  print(p)
+  dev.off()
+}
+
 do_cont_comparison(variable = "heavychain_mu_freq_cdr_r",plot_title = "Replacement mutations",axislab = "Mutational load")
 do_cont_comparison(variable = "heavychain_mu_freq_cdr_s",plot_title = "Silent mutations",axislab = "Mutational load")
 
 do_cont_comparison(variable = "cdr3_length",plot_title = "CDR3 length",axislab = "CDR3 length")
+
+do_cont_comparison2(variable = "cdr3_length",plot_title = "CDR3 length (MS)",axislab = "CDR3 length",pheno="MS")
+do_cont_comparison2(variable = "cdr3_length",plot_title = "CDR3 length (OINDI)",axislab = "CDR3 length",pheno="OINDI")
+do_cont_comparison2(variable = "cdr3_length",plot_title = "CDR3 length (OIND)",axislab = "CDR3 length",pheno="OIND")
+do_cont_comparison2(variable = "cdr3_length",plot_title = "CDR3 length (NIND)",axislab = "CDR3 length",pheno="NIND")
+
+p=ggplot(b_cells@meta.data %>% filter(cell_type %in% cells),
+aes(phenotype,cdr3_length,fill=cell_type))+
+facet_wrap(~source)+
+geom_boxplot()+
+scale_fill_brewer(palette = "Set1")+
+theme_minimal()+
+labs(x="Phenotype",y="CDR3 length (AA)")
+png("cdr3_all_cohorts.png",res=900,units="in",height=3,width=6)
+p
+dev.off()
+
 
 # repeat by isotype
 do_cont_comparison_by_isotype = function(variable, plot_title){
@@ -1470,7 +1626,7 @@ do_da_var_clonal = function(x,variable,ylim=10, data = b_cells@meta.data,plot_ti
         ))
 
     comparison_label = "Expanded vs Not expanded"
-
+    contrast_name = comparison_label
     colours = c("Up" = "red", "Down" = "blue","nonsig"="grey")
 
     # da plot
@@ -1506,6 +1662,24 @@ variable="v_call_simple",
 data = b_cells@meta.data %>% filter(phenotype=="MS"),
 plot_title="clonal_ighv_ms",
 ylim=50)
+
+# by cell type
+do_da_var_clonal(x="v_call_simple",
+variable="v_call_simple",
+data = b_cells@meta.data %>% filter(phenotype=="MS" & cell_type=="Plasma cells"),
+plot_title="clonal_ighv_ms_pcs",
+ylim=50)
+do_da_var_clonal(x="v_call_simple",
+variable="v_call_simple",
+data = b_cells@meta.data %>% filter(phenotype=="MS" & cell_type=="Memory B cells"),
+plot_title="clonal_ighv_ms_memb",
+ylim=50)
+do_da_var_clonal(x="v_call_simple",
+variable="v_call_simple",
+data = b_cells@meta.data %>% filter(phenotype=="MS" & cell_type =="Naive B cells"),
+plot_title="clonal_ighv_ms_naive",
+ylim=50)
+
 
 do_da_var_clonal(x="clean_isotype",
 variable="clean_isotype",
@@ -2221,6 +2395,7 @@ do_de = function(dat,plot_title,mincells=2){
   dev.off()
 }
 
+
 do_de(
   dat = subset(b_cells,phenotype=="MS" & source == "CSF" & cell_type == "Plasma cells"),
   plot_title = "MS_CSF_PCs"
@@ -2258,7 +2433,6 @@ do_de(
   dat = subset(b_cells,phenotype=="OIND" & source=="CSF" & cell_type == "Plasma cells"),
   plot_title = "OIND_CSF_PCs"
 )
-
 
 do_de(
   dat = subset(b_cells,source=="CSF" & cell_type == "Plasma cells"),
@@ -2476,4 +2650,3 @@ FeaturePlot(dat,features="SUB1")+
   scale_colour_gradient(low="darkblue",high="orange")+
   theme_umap()
 dev.off()
-

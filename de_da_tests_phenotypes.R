@@ -42,6 +42,9 @@ plot_fx = function(path,x,width=4,height=4){
   dev.off()
 }
 
+
+
+
 #######################################
 # Read in data
 #######################################
@@ -90,9 +93,12 @@ all_combo = subset(all_combo,subset = cell_type != "Platelets")
 tysabri_donor = subset(all_combo, iid == "TU146")
 all_combo = subset(all_combo, iid != "TU146")
 
+
+
 #######################################
 # Diff abundance with edgeR
 #######################################
+setwd("../")
 # create new unique ID with donor and source
 all_combo@meta.data = all_combo@meta.data %>% mutate(donor_source = paste0(iid,"_",source))
 all_combo@meta.data$phenotype = all_combo@meta.data$Category
@@ -133,7 +139,7 @@ y.ab$samples =  y.ab$samples %>%
 # now loop
 da_overall_list = list()
 results_df = data.frame()
-design <- model.matrix(~ 0 + grouping + Age + Sex,y.ab$sample)
+design <- model.matrix(~ 0 + grouping + Age + Sex,y.ab$samples)
 colnames(design) = c(levels(factor(y.ab$samples$grouping)),"Age","Sex")
 
 y.ab <- estimateDisp(y.ab, design,trend="none")
@@ -155,7 +161,6 @@ contrast =  makeContrasts(
   OIND_PBMC - Control_PBMC,
   levels = design
 )
-setwd("../")
 # do da tests
 for(i in 1:length(colnames(contrast))){
   contrast_name = colnames(contrast)[i]
@@ -299,6 +304,7 @@ all_combo[['cell_type']] = all_combo[['cell_type_crude']]
 
 
 
+
 #######################################
 # Diff abundance with edgeR
 #######################################
@@ -306,9 +312,11 @@ all_combo[['cell_type']] = all_combo[['cell_type_crude']]
 all_combo@meta.data = all_combo@meta.data %>% mutate(donor_source = paste0(iid,"_",source))
 all_combo@meta.data = all_combo@meta.data %>% mutate(full_cell_id = paste0(cell_type,"_",phenotype,"_",source,"_",iid))
 
-n_col = all_combo@meta.data$cell_type %>% unique %>% length
+# set up palette
+n_col = all_combo@meta.data$cell_type_crude %>% unique %>% length
 colour_pal <- RColorBrewer::brewer.pal(n_col, "Paired")
 colour_pal <- grDevices::colorRampPalette(colour_pal)(n_col)
+
 
 all_combo@meta.data$cell_type = factor(
 all_combo@meta.data$cell_type,
@@ -333,6 +341,13 @@ p=DimPlot(all_combo,label=F,raster=F,group.by="cell_type")+
 scale_color_manual(values = colour_pal)+
 theme_umap()
 plot_fx("./da_plots/dim_plot_simple_labels.png",p)
+
+
+# plot
+p=DimPlot(all_combo,label=F,raster=F,group.by="cell_type",split.by="source")+
+scale_color_manual(values = colour_pal)+
+theme_umap()
+plot_fx("./da_plots/dim_plot_simple_labels_by_source.png",p,width=6)
 
 # stash sample info
 sample_info = all_combo@meta.data %>%
@@ -386,6 +401,7 @@ contrast =  makeContrasts(
   MS_PBMC - Control_PBMC,
   MS_PBMC - OINDI_PBMC,
   OIND_PBMC - Control_PBMC,
+  OINDI_CSF - OIND_CSF,
   levels = design
 )
 
@@ -616,6 +632,105 @@ png("./da_plots/crude_labels_absolute_cell_counts_barplot.png",res=300,width=7,h
 ggplot(all_combo@meta.data,aes(phenotype,fill=cell_type))+geom_bar()+facet_wrap(~source)+scale_fill_brewer(palette="Set3")+theme_classic()+labs(x="Phenotype",y="Absolute cell count",fill="Cell type")
 dev.off()
 
+#######################################
+# Unpaired DA en masse
+#######################################
+
+sample_info$grouping = sample_info$source
+y.ab = DGEList(abundances, samples=sample_info)
+# update sample info
+y.ab$samples =  y.ab$samples %>%
+  left_join(all_combo@meta.data %>%
+              distinct(donor_source,.keep_all=TRUE) %>%
+              dplyr::select(Age,Sex,donor_source),by="donor_source")
+
+# now loop
+design <- model.matrix(~ 0 + grouping + Age + Sex,y.ab$sample)
+colnames(design) = c(levels(factor(y.ab$samples$grouping)),"Age","Sex")
+
+y.ab <- estimateDisp(y.ab, design,trend="none")
+fit <- glmQLFit(y.ab, design, robust=TRUE, abundance.trend=FALSE)
+
+# define contrast for testing
+contrast =  makeContrasts(
+  CSF - PBMC,
+  levels = design
+)
+
+# do da tests
+contrast_name = "CSF vs PBMC"
+res = glmQLFTest(fit, contrast = contrast)
+
+# write to file
+print(summary(decideTests(res)))
+res = res$table %>% mutate(P_adj = p.adjust(PValue,method="fdr")) %>% arrange(PValue)
+res$cell = rownames(res)
+write_csv(res,paste0("./da_plots/UNPAIRED_EN_MASSE_crude_labels_edgeR_da_tests_",contrast_name,".csv"))
+res$significant = ifelse(res$P_adj<0.01,"yes","no")
+res$direction = ifelse(res$logFC>0,"Up","Down")
+comparison_label = contrast_name
+
+  # refactor cell types (for plotting)
+  res$cell = factor(res$cell,ordered=TRUE,levels = c("B cells",
+"Plasma cells",
+"mDCs",
+"HSPCs",
+"CD14 Mono",
+"CD16 Mono",
+"Macrophages",
+"CD4 T cells",
+"CD8 T cells",
+"Tregs",
+"MAIT cells",
+"NK cells",
+"pDCs"
+))
+
+  # da plot
+ymax = max(-log10(res$PValue)) *1.1
+xmax = max(abs(res$logFC)) * 1.1
+
+  plot = ggplot(res,aes(logFC,-log10(PValue),color=cell,label=cell))+
+  theme_classic()+
+  scale_color_manual(values = colour_pal)+
+  geom_text_repel(size=3,max.overlaps=100)+
+  geom_hline(yintercept= -log10(0.05/length(res$logFC)),alpha=0.2)+
+  geom_vline(xintercept = 0,alpha=0.2)+
+  NoLegend()+
+  ggtitle(comparison_label)+
+  scale_y_continuous(limits=c(0,ymax))+
+  scale_x_continuous(limits=c(-xmax,xmax))+
+  geom_point(shape=16,size=3)
+
+
+  png(paste0("./da_plots/UNPAIRED_EN_MASSE_crude_labels_da_plot_",contrast_name,"_.png"),res=300,units="in",height=3,width=4)
+  print(plot)
+  dev.off()
+
+######################################
+# PCs
+######################################
+
+pcs = prcomp(abundances %>% t, center = T, scale = T)
+pcs = pcs$x %>%
+  data.frame() %>%
+  mutate(donor_source = rownames(pcs$x) ) %>%
+  left_join(sample_info,by="donor_source")
+
+ggplot(pcs,aes(PC1,PC2,col=source))+
+  geom_point()+
+  theme_minimal()+
+  scale_color_brewer(palette="Set1")
+ggplot(pcs,aes(PC1,PC2,col=phenotype))+
+  geom_point()+
+  facet_wrap(~source)+
+  theme_minimal()+
+  scale_color_brewer(palette="Set1")
+  ggplot(pcs %>% filter(phenotype %in% c("OIND","OINDI")),aes(PC1,PC2,col=phenotype))+
+    geom_point()+
+    facet_wrap(~source)+
+    theme_minimal()+
+    scale_color_brewer(palette="Set1")
 
 
 ######################################
@@ -1097,6 +1212,128 @@ geom_col()+theme_classic() + theme(axis.text.x=element_text(angle=90))+labs(y="n
 png(paste0("overall_de_gene_count_plot.png"),res=300,units="in",height=8,width=8)
 p1
 dev.off()
+
+
+# write summary of all cell counts
+cell_counts_all = all_combo@meta.data %>%
+dplyr::count(source,cell_type_crude)
+write_csv(cell_counts_all,"/rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/da_plots/all_cell_counts.csv")
+
+##############################
+###    UNPAIRED POOLED DE  ###
+##############################
+
+# convert to sce object
+all_combo.sce = as.SingleCellExperiment(all_combo)
+
+# tabulate to find out which 'groups' will have insufficient cells for DE
+min_cells_per_sample = 10
+
+low_counts = all_combo@meta.data %>%
+  group_by(iid,source,phenotype,cell_type) %>%
+  dplyr::count() %>%
+  arrange(n) %>%
+  filter(n<min_cells_per_sample) %>%
+  mutate(donor_to_exclude = paste0(cell_type,"_",phenotype,"_",source,"_",iid))
+
+# aggregate counts
+groups = colData(all_combo.sce)[, c("ident","source","iid")]
+aggregated_counts  = aggregate.Matrix(t(counts(all_combo.sce)),
+groupings = groups, fun = "sum")
+
+# remove groups with low cell counts for DE (<n cells)
+aggregated_counts = aggregated_counts[!rownames(aggregated_counts) %in% low_counts$donor_to_exclude,]
+
+# get names for clusters
+clusters = levels(factor(all_combo@meta.data$cell_type))
+clusters = clusters[!clusters %in% c("HSPCs","Macrophages")]
+table(factor(all_combo@meta.data$cell_type))
+
+# split by cluster
+filtered_matrices = lapply(clusters,function(x){
+  filtered_matrix = aggregated_counts[grepl(x,rownames(aggregated_counts)),] %>% t()
+})
+names(filtered_matrices)=clusters
+
+results_df = data.frame()
+de_results = lapply(clusters,function(cell_type){
+
+  de_input = filtered_matrices[[cell_type]]
+
+  group_vector = lapply(colnames(de_input),function(y){
+      if(grepl("_PBMC",y)){
+        "PBMC"
+      } else if(grepl("_CSF",y)){
+        "CSF"
+      }
+      }) %>% unlist %>% factor()
+
+    # make the DGE object
+    y=DGEList(de_input,group=group_vector,remove.zeros=TRUE)
+
+    # update sample info
+    y$samples =  y$samples %>% mutate(full_cell_id = rownames(y$samples)) %>%
+      left_join(all_combo@meta.data %>%
+      mutate(full_cell_id = paste0(cell_type,"_",source,"_",iid)) %>%
+        dplyr::select(Age,Sex,full_cell_id) %>%
+                  distinct(full_cell_id,.keep_all=TRUE),by="full_cell_id")
+
+
+    # make the design matrix
+    message("Doing DE for ",cell_type)
+    design = model.matrix(~0+group_vector+Age+Sex,y$samples)
+    colnames(design) = c(levels(group_vector),"Age","Sex")
+
+    keep = filterByExpr(
+      y,
+      design = design,
+      group = group_vector,
+      min.count = 10,
+      min.total.count = 500,
+      large.n = 100,
+      min.prop = 0.9)
+    y = y[keep, , keep.lib.sizes=FALSE]
+    y = calcNormFactors(y)
+    y = estimateDisp(y,design,robust=TRUE)
+    fit = glmQLFit(y, design, robust=TRUE)
+
+    # define contrast for testing
+    contrast1 = makeContrasts(CSF - PBMC,levels = design)
+
+    # do de tests
+    res = glmQLFTest(fit, contrast = contrast1)
+
+    # write to file
+    print(summary(decideTests(res)))
+
+    res = res$table %>% mutate(P_adj = p.adjust(PValue,method="fdr")) %>% arrange(PValue)
+    res$gene = rownames(res)
+    write_csv(res,paste0("./de_results/POOLED_UNPAIRED_DE_edgeR_de_tests_",cell_type,".csv"))
+    res$significant = ifelse(res$P_adj<0.05,"yes","no")
+    res$direction = ifelse(res$logFC>0,"Up","Down")
+    total_genes = nrow(res)
+    non_sig = sum(res$significant=="no")
+    sig_up = sum(res$significant=="yes" & res$direction=="Up")
+    sig_down = sum(res$significant=="yes" & res$direction=="Down")
+
+    # de plot
+    colours = c("Up" = "red", "Down" = "blue", "nonsig" = "grey")
+    plot = ggplot(res,aes(logFC,-log10(PValue),color=direction,label=gene))+
+    theme_bw()+
+    geom_point()+
+    NoLegend()+
+    geom_label_repel(data=res %>% arrange(PValue) %>% head(n=10),mapping=aes(),max.overlaps=500)+
+    ggtitle(paste0(cell_type," unpaired CSF v PBMC"))+
+    scale_color_manual(values = colours)
+
+    png(paste0("./de_plots/de_plot_POOLED_UNPAIRED_",cell_type,".png"),
+    res=300,units="in",height=4,width=4)
+    print(plot)
+    dev.off()
+
+
+})
+
 
 
 #######################################

@@ -171,6 +171,11 @@ de_res = do.call("bind_rows",de_res)
 de_res = de_res %>%
   mutate(P_adj = p.adjust(PValue,method="bonf"))
 
+
+sig_effects0 =  de_res %>% filter(P_adj < 0.05) %>%
+  mutate(gene_cell = paste0(gene,"_",cell_type))
+
+
 # summary numbers
 plot_dat = de_res %>%
   group_by(contrast,cell_type) %>%
@@ -253,3 +258,110 @@ de_res %>%
   "MS_CSF - OIND_CSF"
   )) %>%
   filter(P_adj)
+
+
+
+  ##############################
+  # POOLED DE SUMMARY PLOTS
+  ##############################
+
+  # set WD
+  setwd("/home/hpcjaco1/rds/hpc-work/Cambridge_EU_combined/de_plots")
+
+  # list files
+  files = list.files("../de_results/",pattern="POOLED_UNPAIRED_DE_edgeR_de_tests_",full.names=T)
+
+  # read in files
+  de_res = purrr::map(files,function(x){
+    y = str_remove(str_remove(x,"../de_results//POOLED_UNPAIRED_DE_edgeR_de_tests_"),".csv")
+    read_csv(x) %>%
+      mutate(cell_type = y)
+  })
+
+  # combine
+  de_res = do.call("bind_rows",de_res)
+
+  # recalculate P_adj with global Bonf
+  de_res = de_res %>%
+    mutate(P_adj = p.adjust(PValue,method="bonf"))
+
+  sig_effects =  de_res %>% filter(P_adj < 0.05) %>%
+    mutate(gene_cell = paste0(gene,"_",cell_type))
+
+sig_effects %>%
+  filter(!gene_cell %in% sig_effects0$gene_cell)
+
+  # summary numbers
+  plot_dat = de_res %>%
+    group_by(cell_type) %>%
+    mutate(sig = ifelse(P_adj < 0.05, "Y","N")) %>%
+    dplyr::count(sig) %>%
+    mutate(prop = n/sum(n)) %>%
+    mutate(total = sum(n)) %>%
+    filter(sig=="Y")
+
+# get cell counts
+cell_counts = read_csv("/rds/user/hpcjaco1/hpc-work/Cambridge_EU_combined/da_plots/all_cell_counts.csv") %>%
+  pivot_wider(names_from = source,values_from = n, id_cols = cell_type_crude) %>%
+  dplyr::rename("cell_type" = cell_type_crude)
+
+plot_dat = plot_dat %>%
+left_join(cell_counts,by="cell_type")
+
+# set up palette
+n_col = plot_dat$cell_type %>% unique %>% length
+colour_pal <- RColorBrewer::brewer.pal(n_col, "Paired")
+colour_pal <- grDevices::colorRampPalette(colour_pal)(n_col)
+plot_dat$cell_type = factor(plot_dat$cell_type,
+ordered=TRUE,
+levels = c("B cells",
+"Plasma cells",
+"mDCs",
+"HSPCs",
+"CD14 Mono",
+"CD16 Mono",
+"Macrophages",
+"CD4 T cells",
+"CD8 T cells",
+"Tregs",
+"MAIT cells",
+"NK cells",
+"pDCs"
+))
+ggplot(plot_dat,aes(log10(CSF),n,col=cell_type,label=cell_type))+
+  geom_point(size=3)+
+  theme_minimal()+
+  scale_color_manual(values = colour_pal)+
+  labs(x="Log10(N total cells in CSF)",y="N significant DE genes")+
+  geom_label_repel(fill="black",show.legend=F)+
+  theme(legend.position="none")
+
+ggplot(plot_dat,aes(log10(PBMC),n,col=cell_type,label=cell_type))+
+  geom_point(size=3)+
+  theme_minimal()+
+  scale_color_manual(values = colour_pal)+
+  labs(x="Log10(N total cells in PBMC)",y="N significant DE genes")+
+  geom_label_repel(fill="black",show.legend=F)+
+  theme(legend.position="none")
+
+
+de_res$contrast = "CSF - PBMC"
+comparison = "CSF - PBMC"
+
+# save overall results
+write_csv(de_res,"POOLED_UNPAIRED_all_de_res.csv")
+make_plot("CSF - PBMC")
+
+
+# correlation
+pooled = read_csv("POOLED_UNPAIRED_all_de_res.csv")
+unpooled = read_csv("all_de_res.csv") %>% filter(contrast == "MS_CSF - MS_PBMC")
+
+cor.test(combo$logFC.x,combo$logFC.y)
+combo = pooled %>%
+left_join(unpooled,by=c("cell_type","gene"))
+ggplot(combo,aes(logFC.x,logFC.y,col=cell_type))+geom_point()+
+labs(x="logFC (All CSF - All PBMC)",
+y="logFC (MS CSF - MS PBMC)")+
+theme_minimal()+
+geom_abline(intercept=0, slope =1, alpha=0.5)

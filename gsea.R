@@ -155,7 +155,7 @@ for(x in c("MS CSF vs OINDI CSF","OINDI CSF vs OINDI PBMC","MS PBMC vs OINDI PBM
   p=ggplot(plot_data,aes(cell_type,pathway,fill=NES,label=p_label))+
     geom_tile(col="black")+
     geom_text(size=4)+
-    scale_fill_gradient(low="purple",high="orange")+
+    scale_fill_gradient2(low="purple",high="orange",midpoint=0)+
     theme_classic()+
     labs(x="Cell type",y="Gene set")+
     ggtitle(x)+
@@ -163,3 +163,85 @@ for(x in c("MS CSF vs OINDI CSF","OINDI CSF vs OINDI PBMC","MS PBMC vs OINDI PBM
   print(p)
   dev.off()
 }
+
+
+# add pooled comparison of CSF vs PBMC
+
+res_overall = list()
+geneset = "hallmark"
+comparison = "CSF vs PBMC"
+genelist = eval(parse(text = paste0(geneset,"_list")))
+  for(x in 1:length(levels(factor(clusters)))){
+      this_comparison = comparison
+      cluster = levels(factor(clusters))[x]
+      message("Doing GSEA for cluster ",cluster)
+      message("Comparison:", comparison)
+
+      # read in and rank
+      file = paste0("../de_results/POOLED_UNPAIRED_DE_edgeR_de_tests_",cluster,".csv")
+      if(!file.exists(file)){
+        message("File does not exist. Moving on")
+        next
+      }
+      de = read_csv(file)
+      ranked_genes = de %>% arrange(logFC) %>% dplyr::select(gene,logFC)
+      ranked_genes_vector = ranked_genes$logFC
+      names(ranked_genes_vector) = ranked_genes$gene
+      message("There are ",nrow(ranked_genes)," genes in this analysis")
+
+      # do gsea
+      res = fgsea(genelist, stats = ranked_genes_vector, minSize=10,eps=0, nPermSimple = nperm)
+      sig_pathways = res %>% filter(padj<0.05)
+
+      res = res %>% arrange(padj) %>%  dplyr::select(1,2,3,5,6) %>%  mutate(cell_type = cluster) %>% data.frame()
+      res_overall[[(length(res_overall)+1)]] = res
+      res = res %>% arrange(NES)
+      res$pathway = factor(res$pathway,ordered=TRUE,levels=res$pathway)
+      topres = res %>% arrange(padj) %>% head(n=20) %>% arrange(desc(NES))
+      topres$direction = ifelse(topres$NES>0,"up","down")
+      colours = c("up" = "red","down"="blue")
+      plot = ggplot(topres,aes(NES,pathway,label=ifelse(padj<0.05,"*"," "),alpha=-log10(pval),fill=direction))+
+        geom_col()+
+        theme_bw()+
+        ggtitle(paste0("Comparison of ",cluster," in ",this_comparison)) +
+        labs(x="Normalised enrichment score",fill=paste0("Up or down-regulated in \n ",this_comparison))+
+        geom_text()+
+        scale_fill_manual(values = colours, labels = c(paste0("Up in ",this_comparison),paste0("Down in ",this_comparison)))+
+        scale_alpha(guide="none")
+
+      png(paste0("POOLED_UNPAIRED_gsea_results_",geneset,"_",cluster,"_",comparison,".png"),res=300,units="in",height=8,width=8)
+      print(plot)
+      dev.off()
+    }
+
+res_overall = do.call("rbind",res_overall)
+write_csv(res_overall,"UNPAIRED_POOLED_res_overall.csv")
+message("Finished GSEA")
+res_overall$fdr = p.adjust(res_overall$pval,method="fdr")
+
+x = "CSF vs PBMC (all samples)"
+top_paths = res_overall %>% arrange(fdr) %>% distinct(pathway,.keep_all=TRUE) %>% head(n=20)
+plot_data = res_overall %>% filter(pathway %in% top_paths$pathway) %>% filter(grepl("HALLMARK",pathway)) %>% arrange(NES)
+plot_data$pathway = factor(plot_data$pathway,levels=unique(plot_data$pathway))
+plot_data$pathway = str_remove(plot_data$pathway,"HALLMARK_")
+png(paste0("summary_",x,".png"),res=300,units="in",width=8,height=4)
+
+# set labels
+plot_data = plot_data %>%
+  mutate(p_label = case_when(
+    fdr >= 0.05 ~ "",
+    fdr < 0.05 & fdr >= 0.005 ~"*",
+    fdr < 0.005 & fdr >= 0.0005 ~ "**",
+    fdr < 0.0005 ~"***"
+  ))
+
+p=ggplot(plot_data,aes(cell_type,pathway,fill=NES,label=p_label))+
+  geom_tile(col="black")+
+  geom_text(size=4)+
+  scale_fill_gradient2(low="purple",high="orange",midpoint = 0)+
+  theme_classic()+
+  labs(x="Cell type",y="Gene set")+
+  ggtitle(x)+
+  theme(axis.text.x=element_text(angle=90,vjust=-0.05))
+print(p)
+dev.off()
