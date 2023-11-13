@@ -847,6 +847,24 @@ t_cells@meta.data = t_cells@meta.data %>%
   mutate(donor_clone = paste0(iid,"_",clone_id)) %>%
   mutate(expanded_clone = ifelse(donor_clone %in% expanded_clones$donor_clone,"Expanded","Not expanded"))
 
+
+# plot cell types in expanded vs not
+png("./expanded_plot_celltypes_barplot.png",res=300,width=7,height=4,units="in")
+plot_dat = t_cells@meta.data %>%
+  mutate(phenotype_new = ifelse(as.character(phenotype) == "OINDI","ID",as.character(phenotype))) %>%
+  mutate(expanded_clone = ifelse(expanded_clone == "Expanded","Y","N"))
+plot_dat$phenotype_new = factor(plot_dat$phenotype_new,levels = c("NIND","OIND","ID","MS"),ordered=T)
+ggplot(plot_dat,
+  aes(expanded_clone,fill=cell_type))+
+  geom_bar(position="fill",color="black")+
+  facet_grid(source~phenotype_new)+
+  scale_fill_manual(values = colour_pal)+
+  theme_minimal()+
+  labs(x="Expanded clone?",y="Proportion of\nB/plasma cells",fill="Cell type")
+dev.off()
+
+
+
 # define TRBV types
 t_cells@meta.data$trbv_family = sapply(t_cells@meta.data$v_call_VDJ,function(x){
   y = str_split(x,"\\|",2)[[1]][1]
@@ -1955,6 +1973,50 @@ png("clonal_epitopes.png",res=600,units="in",width=8,height=3)
 p
 dev.off()
 
+# repeat just CSF
+expanded_plot_dat_csf = trb_matches %>%
+filter(source=="CSF") %>%
+group_by(expanded_clone,phenotype) %>%
+  dplyr::count(antigen.species) %>%
+    mutate(prop = n/sum(n))
+
+p = ggplot(expanded_plot_dat_csf %>% filter(antigen.species != "No match"),
+aes(antigen.species,prop,fill=expanded_clone))+
+geom_col(position= position_dodge(),color="black")+
+facet_wrap(~phenotype,nrow=1)+
+scale_fill_brewer(palette="Set1")+
+theme_minimal()+
+labs(x="Antigen target", y="Proportion",fill="Expanded clone?")+
+coord_flip()+
+scale_y_continuous(breaks = c(0,0.02))
+
+png("clonal_epitopes_just_csf.png",res=600,units="in",width=8,height=3)
+p
+dev.off()
+
+# repeat with epitopes
+expanded_plot_dat_csf = trb_matches %>%
+filter(source=="CSF") %>%
+group_by(expanded_clone,phenotype) %>%
+  dplyr::count(antigen.species,antigen.gene) %>%
+    mutate(prop = n/sum(n))
+
+
+p = ggplot(expanded_plot_dat_csf %>% filter(antigen.species != "No match") %>% mutate(antigen = paste0(antigen.species,"_",antigen.gene)),
+aes(antigen,prop,fill=expanded_clone))+
+geom_col(position= position_dodge(),color="black")+
+facet_wrap(~phenotype,nrow=1)+
+scale_fill_brewer(palette="Set1")+
+theme_minimal()+
+labs(x="Antigen target", y="Proportion",fill="Expanded clone?")+
+coord_flip()+
+scale_y_continuous(breaks = c(0,0.02))
+
+png("clonal_epitopes_just_csf_full_epitope.png",res=600,units="in",width=8,height=6)
+p
+dev.off()
+
+
 
 
 # find exact matches in VDJDB
@@ -2012,7 +2074,7 @@ left_join(t_cells@meta.data,by="original_barcode")
 
 # LOOK AT SPECIFIC MATCHES
 ebv_matches = full_matches %>% filter(antigen.species == "EBV")
-# make indicator in main dataset 
+# make indicator in main dataset
 ebv = t_cells@meta.data %>%
   mutate(has_specific_match = ifelse(
   original_barcode %in% ebv_matches$original_barcode,
@@ -2032,9 +2094,9 @@ geom_col(color="black",position=position_dodge())+
 scale_fill_brewer(palette="Set1")+
 theme_minimal()
 
-# REPEAT FOR CMV 
+# REPEAT FOR CMV
 ebv_matches = full_matches %>% filter(antigen.species == "CMV")
-# make indicator in main dataset 
+# make indicator in main dataset
 ebv = t_cells@meta.data %>%
   mutate(has_specific_match = ifelse(
   original_barcode %in% ebv_matches$original_barcode,
@@ -2054,7 +2116,7 @@ geom_col(color="black",position=position_dodge())+
 scale_fill_brewer(palette="Set1")+
 theme_minimal()
 
-  
+
 # filter out low counts
 lowcounts = trb_matches %>%
   dplyr::count(antigen.species) %>%
@@ -2141,4 +2203,3 @@ arrange(pval)
 
 overall_epitope_spec = bind_rows(pval_vs_nind,pval_vs_oind,pval_vs_oindi) %>%
 mutate(p_adj = p.adjust(pval,method="fdr"))
-

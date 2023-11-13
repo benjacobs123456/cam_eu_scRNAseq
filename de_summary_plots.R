@@ -285,11 +285,14 @@ de_res %>%
   de_res = de_res %>%
     mutate(P_adj = p.adjust(PValue,method="bonf"))
 
+<<<<<<< HEAD
   sig_effects =  de_res %>% filter(P_adj < 0.05) %>%
     mutate(gene_cell = paste0(gene,"_",cell_type))
 
 sig_effects %>%
   filter(!gene_cell %in% sig_effects0$gene_cell)
+=======
+>>>>>>> 6a45429 (submission)
 
   # summary numbers
   plot_dat = de_res %>%
@@ -365,3 +368,67 @@ labs(x="logFC (All CSF - All PBMC)",
 y="logFC (MS CSF - MS PBMC)")+
 theme_minimal()+
 geom_abline(intercept=0, slope =1, alpha=0.5)
+<<<<<<< HEAD
+=======
+
+
+
+
+# define function to make plots
+make_plot_pooled_csf_v_pbmc = function(){
+
+  # initialise plot list
+  plots = list()
+  res_overall = list()
+  # loop through cell types
+  for(this_cell_type in unique(de_res$cell_type)){
+
+
+    # plot
+    de_res = de_res %>%
+      mutate(
+        direction = case_when(
+          P_adj < 0.05 & logFC>0 ~ "Up",
+          P_adj < 0.05 & logFC<0 ~ "Down",
+          P_adj >=0.05 ~ "nonsig"
+        ))
+    # de plot
+    colours = c("Up" = "red", "Down" = "blue", "nonsig" = "grey")
+    plot_dat = de_res %>% filter(cell_type == this_cell_type)
+    p=ggplot(plot_dat,aes(logFC,-log10(PValue),color=direction,label=gene))+
+      theme_bw()+
+      geom_point(size=1,alpha=0.8)+
+      ggrepel::geom_text_repel(data = plot_dat %>% filter(P_adj<0.05) %>% arrange(PValue) %>% filter(logFC>1) %>% head(10),
+        size=3,
+        max.overlaps=Inf,
+        min.segment.length=0,
+        force=10,
+        force_pull=0,
+        max.iter=1e6,
+        segment.color="black")+
+      scale_color_manual(values = colours)+
+      ggtitle(str_remove_all(this_cell_type,"_"))+
+      theme(legend.position = "none",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+
+    plots[[length(plots)+1]] = p
+    res_overall[[length(res_overall)+1]] = plot_dat
+  }
+
+
+  png(paste0("POOLED_de_",comparison,".png"),res=600,units="in",height=8,width=8)
+  print(gridExtra::grid.arrange(grobs = plots, top = "CSF vs PBMC (pooled)"))
+  dev.off()
+  res_overall = do.call("bind_rows",res_overall)
+}
+
+
+  # filter to cell types of interest
+de_res = de_res %>% filter(cell_type %in%
+c("Plasma cells","CD8 T cells","CD4 T cells","B cells"))
+  sig_effects =  de_res %>% filter(P_adj < 0.05) %>%
+    mutate(gene_cell = paste0(gene,"_",cell_type))
+
+make_plot_pooled_csf_v_pbmc()
+>>>>>>> 6a45429 (submission)

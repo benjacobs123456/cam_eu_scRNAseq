@@ -983,7 +983,12 @@ make_categorical_plot = function(x){
     geom_bar(position="fill",color="black")+
     facet_wrap(~source)+
     theme_bw()+
+<<<<<<< HEAD
     labs(x="Phenotype",fill=x,y="Proportion")
+=======
+    labs(x="Phenotype",fill=x,y="Proportion")+
+    scale_fill_brewer(palette="Paired")
+>>>>>>> 6a45429 (submission)
 }
 
 make_continuous_plot = function(x){
@@ -991,7 +996,12 @@ make_continuous_plot = function(x){
     geom_boxplot(color="black")+
     facet_wrap(~source)+
     theme_bw()+
+<<<<<<< HEAD
     labs(x="Phenotype",y=x)
+=======
+    labs(x="Phenotype",y=x)+
+    scale_fill_brewer(palette="Paired")
+>>>>>>> 6a45429 (submission)
 }
 
 var_list = list("expanded_clone","shm_positive","isotype","ighv_family","status_summary","cell_type")
@@ -1184,12 +1194,17 @@ do_da_var(data = b_cells@meta.data %>% mutate(donor_clone_source = paste0(donor_
 do_da_var(data = b_cells@meta.data,
           x = "phenotype",
           contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "OIND_CSF - OIND_PBMC",
+                                "OINDI_CSF - OINDI_PBMC",
+                                "NIND_CSF - NIND_PBMC",
                                 "MS_CSF - OIND_CSF",
-                                "MS_CSF - OINDI_CSF"),
+                                "MS_CSF - OINDI_CSF",
+                                "MS_CSF - NIND_CSF"),
           variable="v_call_simple",
           var_label = "IGHV allele",
           plot_title = "ighv_segments",
-          ylim=20)
+          ylim=40)
+
 
 # by cell type
 do_da_var(data = b_cells@meta.data %>% filter(cell_type=="Plasma cells"),
@@ -1203,6 +1218,20 @@ do_da_var(data = b_cells@meta.data %>% filter(cell_type=="Plasma cells"),
           ylim=20)
 
 # by cell type
+<<<<<<< HEAD
+do_da_var(data = b_cells@meta.data %>% filter(cell_type=="Plasma cells"),
+          x = "phenotype",
+          contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "MS_CSF - OIND_CSF",
+                                "MS_CSF - OINDI_CSF"),
+          variable="v_call_simple",
+          var_label = "IGHV allele",
+          plot_title = "ighv_segments_pcs",
+          ylim=20)
+
+# by cell type
+=======
+>>>>>>> 6a45429 (submission)
 do_da_var(data = b_cells@meta.data %>% filter(cell_type=="Memory B cells"),
 x = "phenotype",
 contrasts_to_test = c("MS_CSF - MS_PBMC",
@@ -1228,9 +1257,13 @@ do_da_var(data = b_cells@meta.data %>%
             mutate(donor_clone_source = paste0(donor_clone,"_",source)) %>%
             distinct(donor_clone_source,.keep_all=TRUE),
           x = "phenotype",
-          contrasts_to_test = c("MS_CSF - MS_PBMC",
-                                "MS_CSF - OIND_CSF",
-                                "MS_CSF - OINDI_CSF"),
+          contrasts_to_test =      c("MS_CSF - MS_PBMC",
+                                      "OIND_CSF - OIND_PBMC",
+                                      "OINDI_CSF - OINDI_PBMC",
+                                      "NIND_CSF - NIND_PBMC",
+                                      "MS_CSF - OIND_CSF",
+                                      "MS_CSF - OINDI_CSF",
+                                      "MS_CSF - NIND_CSF"),
           variable="v_call_simple",
           var_label = "IGHV allele",
           plot_title = "eachclone",
@@ -1244,12 +1277,16 @@ do_da_var(data = b_cells@meta.data %>% mutate(donor_clone_source = paste0(donor_
           ,
           x = "phenotype",
           contrasts_to_test = c("MS_CSF - MS_PBMC",
+                                "OIND_CSF - OIND_PBMC",
+                                "OINDI_CSF - OINDI_PBMC",
+                                "NIND_CSF - NIND_PBMC",
                                 "MS_CSF - OIND_CSF",
-                                "MS_CSF - OINDI_CSF"),
+                                "MS_CSF - OINDI_CSF",
+                                "MS_CSF - NIND_CSF"),
           variable="iglightchain_family",
           var_label = "Ig light chain",
           plot_title = "lightchain_family_eachclone",
-          ylim=20)
+          ylim=10)
 
 # light chain family
 do_da_var(data = b_cells@meta.data,
@@ -1657,12 +1694,33 @@ data = b_cells@meta.data %>% filter(phenotype=="MS"),
 plot_title="clonal_celltypes_ms",
 ylim=50)
 
+do_da_var_clonal(x="cell_type",
+variable="cell_type",
+data = b_cells@meta.data,
+plot_title="clonal_celltypes_allpheno",
+ylim=50)
+
 do_da_var_clonal(x="v_call_simple",
 variable="v_call_simple",
 data = b_cells@meta.data %>% filter(phenotype=="MS"),
 plot_title="clonal_ighv_ms",
 ylim=50)
 
+<<<<<<< HEAD
+=======
+do_da_var_clonal(x="v_call_simple",
+variable="v_call_simple",
+data = b_cells@meta.data,
+plot_title="clonal_ighv_allpheno",
+ylim=50)
+
+do_da_var_clonal(x="v_call_simple",
+variable="ighv_family",
+data = b_cells@meta.data,
+plot_title="clonal_ighv_fam_allpheno",
+ylim=50)
+
+>>>>>>> 6a45429 (submission)
 # by cell type
 do_da_var_clonal(x="v_call_simple",
 variable="v_call_simple",
@@ -1691,7 +1749,20 @@ do_da_var_clonal(x="lightchain_call_simple",
 variable="lightchain_call_simple",
 data = b_cells@meta.data %>% filter(phenotype=="MS"),
 plot_title="clonal_iglight_ms",
-ylim=50)
+ylim=20)
+
+do_da_var_clonal(x="lightchain_call_simple",
+variable="lightchain_call_simple",
+data = b_cells@meta.data %>% filter(phenotype=="OINDI"),
+plot_title="clonal_iglight_oindi",
+ylim=20)
+
+do_da_var_clonal(x="lightchain_call_simple",
+variable="lightchain_call_simple",
+data = b_cells@meta.data %>% filter(phenotype=="OIND"),
+plot_title="clonal_iglight_oind",
+ylim=20)
+
 
 # repeat for OINDI
 do_da_var_clonal(x="cell_type",
@@ -1704,6 +1775,18 @@ do_da_var_clonal(x="v_call_simple",
 variable="v_call_simple",
 data = b_cells@meta.data %>% filter(phenotype=="OINDI"),
 plot_title="clonal_ighv_OINDI",
+ylim=50)
+
+do_da_var_clonal(x="v_call_simple",
+variable="v_call_simple",
+data = b_cells@meta.data %>% filter(phenotype=="OIND"),
+plot_title="clonal_ighv_OIND",
+ylim=50)
+
+do_da_var_clonal(x="v_call_simple",
+variable="v_call_simple",
+data = b_cells@meta.data %>% filter(phenotype=="NIND"),
+plot_title="clonal_ighv_NIND",
 ylim=50)
 
 do_da_var_clonal(x="clean_isotype",
@@ -1970,6 +2053,64 @@ png("expanded_v_not_bcrs_just_ms_just_csf.png",res=300,units="in",height=5,width
 grid.arrange(p0,p1,p2,p3)
 dev.off()
 
+# bar plots
+
+png("./expanded_plot_celltypes_barplot.png",res=300,width=7,height=4,units="in")
+plot_dat = b_cells@meta.data %>%
+  mutate(phenotype_new = ifelse(as.character(phenotype) == "OINDI","ID",as.character(phenotype))) %>%
+  mutate(expanded_clone = ifelse(expanded_clone == "Expanded","Y","N"))
+plot_dat$phenotype_new = factor(plot_dat$phenotype_new,levels = c("NIND","OIND","ID","MS"),ordered=T)
+ggplot(plot_dat,
+  aes(expanded_clone,fill=cell_type))+
+  geom_bar(position="fill",color="black")+
+  facet_grid(source~phenotype_new)+
+  scale_fill_manual(values = colour_pal)+
+  theme_minimal()+
+  labs(x="Expanded clone?",y="Proportion of\nB/plasma cells",fill="Cell type")
+dev.off()
+
+png("./expanded_plot_isotypes_barplot.png",res=300,width=7,height=4,units="in")
+plot_dat = b_cells@meta.data %>%
+  mutate(phenotype_new = ifelse(as.character(phenotype) == "OINDI","ID",as.character(phenotype))) %>%
+  mutate(expanded_clone = ifelse(expanded_clone == "Expanded","Y","N"))
+plot_dat$phenotype_new = factor(plot_dat$phenotype_new,levels = c("NIND","OIND","ID","MS"),ordered=T)
+ggplot(plot_dat,
+  aes(expanded_clone,fill=clean_isotype))+
+  geom_bar(position="fill",color="black")+
+  facet_grid(source~phenotype_new)+
+  scale_fill_manual(values = colour_pal)+
+  theme_minimal()+
+  labs(x="Expanded clone?",y="Proportion of\nB/plasma cells",fill="Isotype")
+dev.off()
+
+png("./expanded_plot_ighv_fam_barplot.png",res=300,width=7,height=4,units="in")
+plot_dat = b_cells@meta.data %>%
+  mutate(phenotype_new = ifelse(as.character(phenotype) == "OINDI","ID",as.character(phenotype))) %>%
+  mutate(expanded_clone = ifelse(expanded_clone == "Expanded","Y","N"))
+plot_dat$phenotype_new = factor(plot_dat$phenotype_new,levels = c("NIND","OIND","ID","MS"),ordered=T)
+ggplot(plot_dat,
+  aes(expanded_clone,fill=ighv_family))+
+  geom_bar(position="fill",color="black")+
+  facet_grid(source~phenotype_new)+
+  scale_fill_manual(values = colour_pal)+
+  theme_minimal()+
+  labs(x="Expanded clone?",y="Proportion of\nB/plasma cells",fill="IGHV family")
+dev.off()
+
+
+png("./expanded_plot_ighlkv_fam_barplot.png",res=300,width=7,height=4,units="in")
+plot_dat = b_cells@meta.data %>%
+  mutate(phenotype_new = ifelse(as.character(phenotype) == "OINDI","ID",as.character(phenotype))) %>%
+  mutate(expanded_clone = ifelse(expanded_clone == "Expanded","Y","N"))
+plot_dat$phenotype_new = factor(plot_dat$phenotype_new,levels = c("NIND","OIND","ID","MS"),ordered=T)
+ggplot(plot_dat,
+  aes(expanded_clone,fill=iglightchain_family))+
+  geom_bar(position="fill",color="black")+
+  facet_grid(source~phenotype_new)+
+  scale_fill_manual(values = colour_pal)+
+  theme_minimal()+
+  labs(x="Expanded clone?",y="Proportion of\nB/plasma cells",fill="IGHV family")
+dev.off()
 
 #######################################
 # Clonal relationships
@@ -2455,6 +2596,14 @@ DimPlot(subset(b_cells,phenotype=="MS" & source=="CSF" & cell_type=="Memory B ce
   theme_umap()
 dev.off()
 
+
+png("sub1_ms_csf.png",res=300,units="in",width=6,height=4)
+FeaturePlot(subset(b_cells,phenotype=="MS" & source=="CSF" & cell_type=="Memory B cells"),split.by="expanded_clone",features="SUB1")
+dev.off()
+
+png("sub1_oindi_csf.png",res=300,units="in",width=6,height=4)
+FeaturePlot(subset(b_cells,phenotype=="OINDI" & source=="CSF" & cell_type=="Memory B cells"),split.by="expanded_clone",features="SUB1")
+dev.off()
 
 # heatmap
 
