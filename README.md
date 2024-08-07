@@ -7,6 +7,7 @@
 - Unless specified, all scripts were run in R/4.0.3 or R/4.1.0.
 - You can access the paper in Cell Reports Medicine [here](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4627475).
 - Raw data (Seurat objects containing 5' gene expression and VDJ receptor sequencing data for B and T cells) can be downloaded via Zenodo [here](https://doi.org/10.5281/zenodo.13253569).
+- Code contributors: Ben Jacobs and Christiane Gasperi
 
 ## Code
 ### Deconvolution and basic qc
